@@ -1,96 +1,65 @@
-require('dotenv').config()
-const express    = require('express')
-const cors       = require('cors')
-const helmet     = require('helmet')
-const morgan     = require('morgan')
-const rateLimit  = require('express-rate-limit')
-const http       = require('http')
-const { Server } = require('socket.io')
-const { testConnection } = require('./config/db')
+const express = require("express");
+const cors = require("cors");
+const rateLimit = require("express-rate-limit");
+require("dotenv").config();
 
-const app    = express()
-const server = http.createServer(app)
-const io     = new Server(server, {
-  cors: { origin: process.env.CORS_ORIGIN?.split(',') || '*', methods: ['GET','POST'] }
-})
+const app = express();
 
-// ─── Middleware ───────────────────────────────────────────────────────────────
-app.use(helmet())
-app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(',') || '*',
-  credentials: true,
-}))
-app.use(express.json({ limit: '10mb' }))
-app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'))
+/* ===============================
+   🔥 IMPORTANT — Render fix
+================================ */
+app.set("trust proxy", 1);
 
+/* ===============================
+   Middlewares
+================================ */
+app.use(cors());
+app.use(express.json());
+
+/* ===============================
+   Rate Limiter
+================================ */
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
-  max: parseInt(process.env.RATE_LIMIT_MAX || '100'),
-  message: { success: false, message: 'Too many requests, please try again later.' }
-})
-app.use('/api/', limiter)
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
-// ─── Routes ──────────────────────────────────────────────────────────────────
-app.use('/api/auth',        require('./routes/auth'))
-app.use('/api/machines',    require('./routes/machines'))
-app.use('/api/bookings',    require('./routes/bookings'))
-app.use('/api/wallet',      require('./routes/wallet'))
-app.use('/api/dashboard',   require('./routes/dashboard'))
-app.use('/api/alerts',      require('./routes/alerts'))
-app.use('/api/users',       require('./routes/users'))
-app.use('/api/attendance',  require('./routes/attendance'))
+app.use("/api", limiter);
 
-// ─── Health Check ─────────────────────────────────────────────────────────────
-app.get('/health', (req, res) => {
+/* ===============================
+   Health Route
+================================ */
+app.get("/api/health", (req, res) => {
   res.json({
-    status: 'OK',
-    app: 'Development Express API',
-    version: '1.0.0',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-  })
-})
+    success: true,
+    message: "🚀 DEVELOPMENT EXPRESS API RUNNING",
+  });
+});
 
-// ─── 404 ──────────────────────────────────────────────────────────────────────
-app.use('*', (req, res) => {
-  res.status(404).json({ success: false, message: `Route ${req.originalUrl} not found` })
-})
+/* ===============================
+   Auth Routes (example)
+   👉 तुझा auth.js असेल तर ठेव
+================================ */
+// const authRoutes = require("./routes/auth");
+// app.use("/api/auth", authRoutes);
 
-// ─── Error Handler ────────────────────────────────────────────────────────────
-app.use((err, req, res, next) => {
-  console.error('Server error:', err)
-  res.status(err.status || 500).json({
-    success: false,
-    message: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message
-  })
-})
+/* ===============================
+   Root Route
+================================ */
+app.get("/", (req, res) => {
+  res.send("✅ Development Express Backend Live");
+});
 
-// ─── Socket.IO ────────────────────────────────────────────────────────────────
-io.on('connection', (socket) => {
-  console.log('📡 Client connected:', socket.id)
-  socket.on('subscribe-machine', (machineId) => {
-    socket.join(`machine-${machineId}`)
-  })
-  socket.on('disconnect', () => {
-    console.log('📡 Client disconnected:', socket.id)
-  })
-})
+/* ===============================
+   Server Start
+================================ */
+const PORT = process.env.PORT || 10000;
 
-// Broadcast GPS update (call from machine update route)
-app.set('io', io)
-
-// ─── Start ────────────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 5000
-
-server.listen(PORT, async () => {
-  console.log('\n╔══════════════════════════════════════════╗')
-  console.log('║   DEVELOPMENT EXPRESS — API SERVER       ║')
-  console.log('╚══════════════════════════════════════════╝')
-  console.log(`🚀 Server running on port ${PORT}`)
-  console.log(`🌍 Environment: ${process.env.NODE_ENV}`)
-  await testConnection()
-  console.log(`📡 Socket.IO ready`)
-  console.log(`🔗 Health: http://localhost:${PORT}/health\n`)
-})
-
-module.exports = app
+app.listen(PORT, () => {
+  console.log("=================================");
+  console.log("🚀 DEVELOPMENT EXPRESS API SERVER");
+  console.log(`🌐 Server running on port ${PORT}`);
+  console.log("=================================");
+});
