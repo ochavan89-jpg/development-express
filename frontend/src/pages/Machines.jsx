@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { machineAPI } from '../services/api'
+import { machinesAPI } from '../services/api'
 import toast from 'react-hot-toast'
 
 const DEMO = [
@@ -18,7 +18,7 @@ export default function Machines() {
   const [evidence, setEvidence] = useState(null)
 
   useEffect(() => {
-    machineAPI.getAll().then(r => setMachines(r.data.data?.length ? r.data.data : DEMO)).catch(() => setMachines(DEMO)).finally(() => setLoading(false))
+    machinesAPI.getAll().then(r => setMachines(r.data.data?.length ? r.data.data : DEMO)).catch(() => setMachines(DEMO)).finally(() => setLoading(false))
   }, [])
 
   return (
@@ -29,7 +29,7 @@ export default function Machines() {
           <p style={{ fontSize:12, color:'var(--text-dim)', marginTop:4 }}>{machines.length} machines · Teltonika GPS + Omnicomm Fuel</p>
         </div>
         <div style={{ display:'flex', gap:10 }}>
-          <button className="btn btn-outline" onClick={() => machineAPI.getAll().then(r=>setMachines(r.data.data||DEMO)).catch(()=>{})}>↻ REFRESH</button>
+          <button className="btn btn-outline" onClick={() => machinesAPI.getAll().then(r=>setMachines(r.data.data||DEMO)).catch(()=>{})}>↻ REFRESH</button>
           <button className="btn btn-gold" onClick={() => toast.success('Add machine form — coming soon!')}>+ ADD MACHINE</button>
         </div>
       </div>
