@@ -1,12 +1,10 @@
 const { Pool } = require('pg')
 
 const pool = new Pool({
-  host:     process.env.DB_HOST,
-  port:     parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME,
-  user:     process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production'
+    ? { rejectUnauthorized: false }
+    : false,
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
@@ -25,7 +23,7 @@ const testConnection = async () => {
     return true
   } catch (err) {
     console.error('❌ Database connection failed:', err.message)
-    console.log('⚠️  Running without database (demo mode)')
+    console.log('⚠️ Running without database (demo mode)')
     return false
   }
 }
