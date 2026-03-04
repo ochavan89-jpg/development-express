@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { userAPI } from '../services/api'
+import { usersAPI } from '../services/api'
 import toast from 'react-hot-toast'
 const DEMO = [
   { id:1, username:'admin',    full_name:'Om Chavan',    email:'om.chavan2026@zohomail.in',          role:'admin',    phone:'9766926636', is_active:true },
@@ -10,7 +10,7 @@ const DEMO = [
 const RC = { admin:'b-maint', owner:'b-active', client:'b-idle', operator:'b-offline' }
 export default function Users() {
   const [users, setUsers] = useState(DEMO)
-  useEffect(() => { userAPI.getAll().then(r=>{ if(r.data.data?.length) setUsers(r.data.data) }).catch(()=>{}) }, [])
+  useEffect(() => { usersAPI.getAll().then(r=>{ if(r.data.data?.length) setUsers(r.data.data) }).catch(()=>{}) }, [])
   return (
     <div>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:22 }}>

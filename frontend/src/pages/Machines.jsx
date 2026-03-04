@@ -18,8 +18,15 @@ export default function Machines() {
   const [evidence, setEvidence] = useState(null)
 
   useEffect(() => {
-    machinesAPI.getAll().then(r => setMachines(r.data.data?.length ? r.data.data : DEMO)).catch(() => setMachines(DEMO)).finally(() => setLoading(false))
-  }, [])
+  machinesAPI
+    .getAll()
+    .then((r) => {
+      const list = r?.data?.data;
+      setMachines(list && list.length ? list : DEMO);
+    })
+    .catch(() => setMachines(DEMO))
+    .finally(() => setLoading(false));
+}, []);
 
   return (
     <div>
