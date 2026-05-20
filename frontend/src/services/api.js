@@ -1,11 +1,17 @@
 import axios from "axios";
 
 // ===============================
-// 🔥 Base URL (Render production)
+// Base URL (Render production)
 // ===============================
-const API_BASE_URL =
+const normalizeApiBaseUrl = (url) => {
+  const trimmed = url.replace(/\/+$/, "");
+  return trimmed.endsWith("/api") ? trimmed : `${trimmed}/api`;
+};
+
+const API_BASE_URL = normalizeApiBaseUrl(
   import.meta.env.VITE_API_URL ||
-  "https://development-express-api.onrender.com/api";
+    "https://development-express-api.onrender.com/api"
+);
 
 // ===============================
 // 🚀 Axios Instance
@@ -16,11 +22,11 @@ const api = axios.create({
 });
 
 // ===============================
-// 🔐 Request Interceptor (token)
+// Request Interceptor (token)
 // ===============================
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("de_token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -30,14 +36,15 @@ api.interceptors.request.use(
 );
 
 // ===============================
-// ⚠️ Response Interceptor (auto logout)
+// Response Interceptor (auto logout)
 // ===============================
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("token");
-      window.location.href = "/login";
+      localStorage.removeItem("de_token");
+      delete api.defaults.headers.common.Authorization;
+      window.location.href = "/";
     }
     return Promise.reject(error);
   }
@@ -55,21 +62,25 @@ export const authAPI = {
 // 📊 Dashboard API
 // ===============================
 export const dashboardAPI = {
-  getStats: () => api.get("/dashboard"),
+  getAdmin: () => api.get("/dashboard/admin"),
+  getOwner: () => api.get("/dashboard/owner"),
+  getClient: () => api.get("/dashboard/client"),
+  getOperator: () => api.get("/dashboard/operator"),
+  getStats: () => api.get("/dashboard/admin"),
 };
 
 // ===============================
 // 🚨 Alerts API
 // ===============================
 export const alertAPI = {
-  getAll: () => api.get("/alerts"),
+  getAll: (params) => api.get("/alerts", { params }),
 };
 
 // ===============================
 // ⚙️ Machines API
 // ===============================
 export const machinesAPI = {
-  getAll: () => api.get("/machines"),
+  getAll: (params) => api.get("/machines", { params }),
 };
 
 // ===============================
@@ -83,7 +94,10 @@ export const usersAPI = {
 // 💰 Wallet API
 // ===============================
 export const walletAPI = {
-  getAll: () => api.get("/wallet"),
+  getBalance: () => api.get("/wallet/balance"),
+  getAllBalances: () => api.get("/wallet/all-balances"),
+  getTransactions: (params) => api.get("/wallet/transactions", { params }),
+  recharge: (data) => api.post("/wallet/recharge", data),
 };
 
 export default api;
