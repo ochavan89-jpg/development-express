@@ -1,11 +1,17 @@
 import axios from "axios";
 
+const TOKEN_KEY = "de_token";
+
 // ===============================
-// 🔥 Base URL (Render production)
+// Base URL (Render production)
 // ===============================
-const API_BASE_URL =
+const rawApiBaseUrl =
   import.meta.env.VITE_API_URL ||
   "https://development-express-api.onrender.com/api";
+const trimmedApiBaseUrl = rawApiBaseUrl.replace(/\/+$/, "");
+const API_BASE_URL = trimmedApiBaseUrl.endsWith("/api")
+  ? trimmedApiBaseUrl
+  : `${trimmedApiBaseUrl}/api`;
 
 // ===============================
 // 🚀 Axios Instance
@@ -20,7 +26,7 @@ const api = axios.create({
 // ===============================
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -36,8 +42,11 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("token");
-      window.location.href = "/login";
+      localStorage.removeItem(TOKEN_KEY);
+      delete api.defaults.headers.common.Authorization;
+      if (window.location.pathname !== "/") {
+        window.location.href = "/";
+      }
     }
     return Promise.reject(error);
   }
@@ -49,27 +58,31 @@ api.interceptors.response.use(
 export const authAPI = {
   login: (data) => api.post("/auth/login", data),
   register: (data) => api.post("/auth/register", data),
+  profile: () => api.get("/auth/profile"),
 };
 
 // ===============================
 // 📊 Dashboard API
 // ===============================
 export const dashboardAPI = {
-  getStats: () => api.get("/dashboard"),
+  getAdmin: () => api.get("/dashboard/admin"),
+  getOwner: () => api.get("/dashboard/owner"),
+  getClient: () => api.get("/dashboard/client"),
+  getOperator: () => api.get("/dashboard/operator"),
 };
 
 // ===============================
 // 🚨 Alerts API
 // ===============================
 export const alertAPI = {
-  getAll: () => api.get("/alerts"),
+  getAll: (params) => api.get("/alerts", { params }),
 };
 
 // ===============================
 // ⚙️ Machines API
 // ===============================
 export const machinesAPI = {
-  getAll: () => api.get("/machines"),
+  getAll: (params) => api.get("/machines", { params }),
 };
 
 // ===============================
@@ -83,7 +96,9 @@ export const usersAPI = {
 // 💰 Wallet API
 // ===============================
 export const walletAPI = {
-  getAll: () => api.get("/wallet"),
+  getBalance: () => api.get("/wallet/balance"),
+  getAllBalances: () => api.get("/wallet/all-balances"),
+  getTransactions: (params) => api.get("/wallet/transactions", { params }),
 };
 
 export default api;

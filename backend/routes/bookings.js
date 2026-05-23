@@ -34,25 +34,67 @@ router.post('/', protect, authorize('admin','client'), async (req, res) => {
 })
 
 router.put('/:id/complete', protect, authorize('admin','operator'), async (req, res) => {
+  let client
   try {
     const { actual_hours, end_fuel_reading, end_hmr } = req.body
-    const { rows: br } = await pool.query('SELECT * FROM bookings WHERE id=$1', [req.params.id])
-    if (!br.length) return res.status(404).json({ success:false, message:'Booking not found' })
-    const totalAmount = actual_hours * br[0].hourly_rate
-    const { rows } = await pool.query(
-      `UPDATE bookings SET status='completed', end_time=NOW(), actual_hours=$1, total_amount=$2, end_fuel_reading=$3, end_hmr=$4 WHERE id=$5 RETURNING *`,
-      [actual_hours, totalAmount, end_fuel_reading, end_hmr, req.params.id]
+    const completedHours = Number(actual_hours)
+    if (!Number.isFinite(completedHours) || completedHours <= 0) {
+      return res.status(400).json({ success:false, message:'Invalid actual hours' })
+    }
+
+    client = await pool.connect()
+    await client.query('BEGIN')
+    const { rows: br } = await client.query('SELECT * FROM bookings WHERE id=$1 FOR UPDATE', [req.params.id])
+    if (!br.length) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ success:false, message:'Booking not found' })
+    }
+    if (req.user.role === 'operator' && String(br[0].operator_id) !== String(req.user.id)) {
+      await client.query('ROLLBACK')
+      return res.status(403).json({ success:false, message:'Cannot complete another operator booking' })
+    }
+    const hourlyRate = Number(br[0].hourly_rate)
+    if (!Number.isFinite(hourlyRate) || hourlyRate < 0) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ success:false, message:'Invalid booking rate' })
+    }
+    const totalAmount = completedHours * hourlyRate
+    const { rows: chargedUsers } = await client.query(
+      'UPDATE de_users SET wallet_balance=wallet_balance-$1 WHERE id=$2 AND wallet_balance >= $1 RETURNING wallet_balance',
+      [totalAmount, br[0].client_id]
     )
-    // Deduct from wallet
-    try {
-      await pool.query('UPDATE de_users SET wallet_balance=wallet_balance-$1 WHERE id=$2', [totalAmount, br[0].client_id])
-    } catch {}
+    if (!chargedUsers.length) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ success:false, message:'Insufficient wallet balance' })
+    }
+    const { rows } = await client.query(
+      `UPDATE bookings SET status='completed', end_time=NOW(), actual_hours=$1, total_amount=$2, end_fuel_reading=$3, end_hmr=$4 WHERE id=$5 RETURNING *`,
+      [completedHours, totalAmount, end_fuel_reading, end_hmr, req.params.id]
+    )
+    await client.query('COMMIT')
     res.json({ success:true, data: rows[0] })
-  } catch (err) { res.status(500).json({ success:false, message:err.message }) }
+  } catch (err) {
+    if (client) await client.query('ROLLBACK').catch(() => {})
+    res.status(500).json({ success:false, message:err.message })
+  } finally {
+    if (client) client.release()
+  }
 })
 
 router.put('/:id/cancel', protect, async (req, res) => {
   try {
+    const { rows } = await pool.query(
+      'SELECT b.*, m.owner_id FROM bookings b LEFT JOIN machines m ON b.machine_id=m.id WHERE b.id=$1',
+      [req.params.id]
+    )
+    if (!rows.length) return res.status(404).json({ success:false, message:'Booking not found' })
+    const booking = rows[0]
+    const canCancel =
+      req.user.role === 'admin' ||
+      (req.user.role === 'client' && String(booking.client_id) === String(req.user.id)) ||
+      (req.user.role === 'operator' && String(booking.operator_id) === String(req.user.id)) ||
+      (req.user.role === 'owner' && String(booking.owner_id) === String(req.user.id))
+    if (!canCancel) return res.status(403).json({ success:false, message:'Cannot cancel this booking' })
     await pool.query("UPDATE bookings SET status='cancelled' WHERE id=$1", [req.params.id])
     res.json({ success:true, message:'Booking cancelled' })
   } catch (err) { res.status(500).json({ success:false, message:err.message }) }
