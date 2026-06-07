@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { dashboardAPI, alertAPI } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 /* KPI Card */
 function KPI({ label, value, sub, icon, color, delay }) {
@@ -37,22 +38,31 @@ const GPS_PINS = [
 ]
 
 export default function Dashboard() {
+  const { user } = useAuth()
   const [stats,  setStats]  = useState(null)
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const statsByRole = {
+      admin: dashboardAPI.getAdmin,
+      owner: dashboardAPI.getOwner,
+      client: dashboardAPI.getClient,
+      operator: dashboardAPI.getOperator,
+    }
+    const loadStats = statsByRole[user?.role] || dashboardAPI.getAdmin
+
     Promise.all([
-      dashboardAPI.getAdmin().catch(() => ({ data:{ data: DEMO_STATS } })),
+      loadStats().catch(() => ({ data:{ data: DEMO_STATS } })),
       alertAPI.getAll({ limit:6 }).catch(() => ({ data:{ data: DEMO_ALERTS } })),
     ]).then(([s,a]) => {
       setStats(s.data.data || DEMO_STATS)
       setAlerts(a.data.data || DEMO_ALERTS)
     }).finally(() => setLoading(false))
-  }, [])
+  }, [user?.role])
 
   const workStop = alerts.find(a => a.alert_type === 'low_wallet' && !a.is_resolved)
-  const s = stats || DEMO_STATS
+  const s = { ...DEMO_STATS, ...(stats || {}) }
 
   if (loading) return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:300, flexDirection:'column', gap:16 }}>
