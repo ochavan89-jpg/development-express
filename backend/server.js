@@ -5,6 +5,15 @@ require("dotenv").config();
 
 const app = express();
 
+const authRoutes = require("./routes/auth");
+const dashboardRoutes = require("./routes/dashboard");
+const machineRoutes = require("./routes/machines");
+const bookingRoutes = require("./routes/bookings");
+const walletRoutes = require("./routes/wallet");
+const userRoutes = require("./routes/users");
+const attendanceRoutes = require("./routes/attendance");
+const alertRoutes = require("./routes/alerts");
+
 /* ===============================
    🔥 IMPORTANT — Render fix
 ================================ */
@@ -39,11 +48,16 @@ app.get("/api/health", (req, res) => {
 });
 
 /* ===============================
-   Auth Routes (example)
-   👉 तुझा auth.js असेल तर ठेव
+   API Routes
 ================================ */
-// const authRoutes = require("./routes/auth");
-// app.use("/api/auth", authRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/machines", machineRoutes);
+app.use("/api/bookings", bookingRoutes);
+app.use("/api/wallet", walletRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/attendance", attendanceRoutes);
+app.use("/api/alerts", alertRoutes);
 
 /* ===============================
    Root Route
