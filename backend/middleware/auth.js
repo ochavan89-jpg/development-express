@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken')
 const { pool } = require('../config/db')
 
+const jwtSecret = () => process.env.JWT_SECRET || 'devexpress_fallback_secret'
+
 const protect = async (req, res, next) => {
   try {
     const auth = req.headers.authorization
@@ -8,7 +10,7 @@ const protect = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'No token provided' })
     }
     const token = auth.split(' ')[1]
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    const decoded = jwt.verify(token, jwtSecret())
 
     // Try DB, fallback to token payload for demo mode
     try {
