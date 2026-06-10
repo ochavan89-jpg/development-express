@@ -15,12 +15,15 @@ const api = axios.create({
   timeout: 30000,
 });
 
+const TOKEN_KEY = "de_token";
+const LEGACY_TOKEN_KEY = "token";
+
 // ===============================
 // 🔐 Request Interceptor (token)
 // ===============================
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem(TOKEN_KEY) || localStorage.getItem(LEGACY_TOKEN_KEY);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -36,7 +39,9 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("token");
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(LEGACY_TOKEN_KEY);
+      delete api.defaults.headers.common.Authorization;
       window.location.href = "/login";
     }
     return Promise.reject(error);
@@ -49,27 +54,33 @@ api.interceptors.response.use(
 export const authAPI = {
   login: (data) => api.post("/auth/login", data),
   register: (data) => api.post("/auth/register", data),
+  profile: () => api.get("/auth/profile"),
+  changePassword: (data) => api.post("/auth/change-password", data),
 };
 
 // ===============================
 // 📊 Dashboard API
 // ===============================
 export const dashboardAPI = {
-  getStats: () => api.get("/dashboard"),
+  getAdmin: () => api.get("/dashboard/admin"),
+  getOwner: () => api.get("/dashboard/owner"),
+  getClient: () => api.get("/dashboard/client"),
+  getOperator: () => api.get("/dashboard/operator"),
+  getStats: () => api.get("/dashboard/admin"),
 };
 
 // ===============================
 // 🚨 Alerts API
 // ===============================
 export const alertAPI = {
-  getAll: () => api.get("/alerts"),
+  getAll: (params) => api.get("/alerts", { params }),
 };
 
 // ===============================
 // ⚙️ Machines API
 // ===============================
 export const machinesAPI = {
-  getAll: () => api.get("/machines"),
+  getAll: (params) => api.get("/machines", { params }),
 };
 
 // ===============================
@@ -83,7 +94,11 @@ export const usersAPI = {
 // 💰 Wallet API
 // ===============================
 export const walletAPI = {
-  getAll: () => api.get("/wallet"),
+  getBalance: () => api.get("/wallet/balance"),
+  getAllBalances: () => api.get("/wallet/all-balances"),
+  getTransactions: (params) => api.get("/wallet/transactions", { params }),
+  recharge: (data) => api.post("/wallet/recharge", data),
+  getAll: () => api.get("/wallet/all-balances"),
 };
 
 export default api;
