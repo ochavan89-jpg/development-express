@@ -3,6 +3,15 @@ const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 require("dotenv").config();
 
+const authRoutes = require("./routes/auth");
+const machinesRoutes = require("./routes/machines");
+const bookingsRoutes = require("./routes/bookings");
+const walletRoutes = require("./routes/wallet");
+const dashboardRoutes = require("./routes/dashboard");
+const alertsRoutes = require("./routes/alerts");
+const usersRoutes = require("./routes/users");
+const attendanceRoutes = require("./routes/attendance");
+
 const app = express();
 
 /* ===============================
@@ -39,11 +48,16 @@ app.get("/api/health", (req, res) => {
 });
 
 /* ===============================
-   Auth Routes (example)
-   👉 तुझा auth.js असेल तर ठेव
+   API Routes
 ================================ */
-// const authRoutes = require("./routes/auth");
-// app.use("/api/auth", authRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/machines", machinesRoutes);
+app.use("/api/bookings", bookingsRoutes);
+app.use("/api/wallet", walletRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/alerts", alertsRoutes);
+app.use("/api/users", usersRoutes);
+app.use("/api/attendance", attendanceRoutes);
 
 /* ===============================
    Root Route

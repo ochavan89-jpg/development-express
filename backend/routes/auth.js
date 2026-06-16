@@ -62,10 +62,11 @@ router.post('/login', async (req, res) => {
 // ─── POST /api/auth/register ─────────────────────────────────────────────────
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password, full_name, phone, role = 'client', company_name } = req.body
+    const { username, email, password, full_name, phone, company_name } = req.body
     if (!username || !email || !password || !full_name) {
       return res.status(400).json({ success:false, message:'Required fields missing' })
     }
+    const role = 'client'
     const hash = await bcrypt.hash(password, parseInt(process.env.BCRYPT_SALT_ROUNDS || '10'))
     const { rows } = await pool.query(
       `INSERT INTO de_users (username,email,password_hash,full_name,phone,role,company_name)
