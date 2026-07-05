@@ -4,6 +4,14 @@ const rateLimit = require("express-rate-limit");
 require("dotenv").config();
 
 const app = express();
+const authRoutes = require("./routes/auth");
+const machinesRoutes = require("./routes/machines");
+const bookingsRoutes = require("./routes/bookings");
+const walletRoutes = require("./routes/wallet");
+const usersRoutes = require("./routes/users");
+const dashboardRoutes = require("./routes/dashboard");
+const alertsRoutes = require("./routes/alerts");
+const attendanceRoutes = require("./routes/attendance");
 
 /* ===============================
    🔥 IMPORTANT — Render fix
@@ -39,11 +47,16 @@ app.get("/api/health", (req, res) => {
 });
 
 /* ===============================
-   Auth Routes (example)
-   👉 तुझा auth.js असेल तर ठेव
+   API Routes
 ================================ */
-// const authRoutes = require("./routes/auth");
-// app.use("/api/auth", authRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/machines", machinesRoutes);
+app.use("/api/bookings", bookingsRoutes);
+app.use("/api/wallet", walletRoutes);
+app.use("/api/users", usersRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/alerts", alertsRoutes);
+app.use("/api/attendance", attendanceRoutes);
 
 /* ===============================
    Root Route
@@ -57,9 +70,13 @@ app.get("/", (req, res) => {
 ================================ */
 const PORT = process.env.PORT || 10000;
 
-app.listen(PORT, () => {
-  console.log("=================================");
-  console.log("🚀 DEVELOPMENT EXPRESS API SERVER");
-  console.log(`🌐 Server running on port ${PORT}`);
-  console.log("=================================");
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log("=================================");
+    console.log("🚀 DEVELOPMENT EXPRESS API SERVER");
+    console.log(`🌐 Server running on port ${PORT}`);
+    console.log("=================================");
+  });
+}
+
+module.exports = app;

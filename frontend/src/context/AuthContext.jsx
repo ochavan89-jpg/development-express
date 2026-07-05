@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import api from '../services/api'
+import api, { authAPI, AUTH_TOKEN_KEY } from '../services/api'
 
 const Ctx = createContext(null)
 
@@ -8,27 +8,27 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const t = localStorage.getItem('de_token')
+    const t = localStorage.getItem(AUTH_TOKEN_KEY)
     if (t) {
       api.defaults.headers.common['Authorization'] = `Bearer ${t}`
-      api.get('/auth/profile')
+      authAPI.profile()
         .then(r => setUser(r.data.data))
-        .catch(() => { localStorage.removeItem('de_token'); delete api.defaults.headers.common['Authorization'] })
+        .catch(() => { localStorage.removeItem(AUTH_TOKEN_KEY); delete api.defaults.headers.common['Authorization'] })
         .finally(() => setLoading(false))
     } else { setLoading(false) }
   }, [])
 
   const login = async (username, password) => {
-    const r = await api.post('/auth/login', { username, password })
+    const r = await authAPI.login({ username, password })
     const { token, user: u } = r.data.data
-    localStorage.setItem('de_token', token)
+    localStorage.setItem(AUTH_TOKEN_KEY, token)
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`
     setUser(u)
     return u
   }
 
   const logout = () => {
-    localStorage.removeItem('de_token')
+    localStorage.removeItem(AUTH_TOKEN_KEY)
     delete api.defaults.headers.common['Authorization']
     setUser(null)
   }
