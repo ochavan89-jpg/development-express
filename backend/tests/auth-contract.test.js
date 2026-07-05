@@ -3,8 +3,6 @@ const http = require('node:http')
 const test = require('node:test')
 const jwt = require('jsonwebtoken')
 
-delete process.env.JWT_SECRET
-
 const { pool } = require('../config/db')
 const app = require('../server')
 
@@ -56,6 +54,8 @@ test('auth login route is mounted below /api', async () => {
 
 test('fallback-signed tokens authenticate protected API routes', async () => {
   const originalQuery = pool.query
+  const originalSecret = process.env.JWT_SECRET
+  delete process.env.JWT_SECRET
   pool.query = async () => {
     throw new Error('demo mode')
   }
@@ -75,6 +75,11 @@ test('fallback-signed tokens authenticate protected API routes', async () => {
     assert.equal(res.body.data.role, 'admin')
   } finally {
     pool.query = originalQuery
+    if (originalSecret === undefined) {
+      delete process.env.JWT_SECRET
+    } else {
+      process.env.JWT_SECRET = originalSecret
+    }
   }
 })
 
