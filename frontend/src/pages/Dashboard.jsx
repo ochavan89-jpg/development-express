@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { dashboardAPI, alertAPI } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 /* KPI Card */
 function KPI({ label, value, sub, icon, color, delay }) {
@@ -24,6 +25,7 @@ const DEMO_ALERTS = [
   { id:5, alert_type:'geofence_breach',title:'Geofence Exit Detected',   message:'MH18HJ7654 Tipper · Left site boundary at 11:42', is_resolved:false },
 ]
 const DEMO_STATS = { total_machines:47, active_machines:38, idle_machines:6, active_bookings:12, hours_today:284, revenue_today:426000 }
+const EMPTY_STATS = { total_machines:0, active_machines:0, idle_machines:0, active_bookings:0, hours_today:0, revenue_today:0 }
 
 const ALERT_ICONS  = { low_fuel:'⛽', low_wallet:'💳', maintenance_due:'🔧', geofence_breach:'📍', unauthorized_use:'⚠' }
 const ALERT_COLORS = { low_fuel:'var(--orange)', low_wallet:'var(--red)', maintenance_due:'var(--blue)', geofence_breach:'var(--blue)', unauthorized_use:'var(--red)' }
@@ -37,19 +39,21 @@ const GPS_PINS = [
 ]
 
 export default function Dashboard() {
+  const { user } = useAuth()
   const [stats,  setStats]  = useState(null)
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const role = user?.role || 'client'
     Promise.all([
-      dashboardAPI.getAdmin().catch(() => ({ data:{ data: DEMO_STATS } })),
+      dashboardAPI.getForRole(role).catch(() => ({ data:{ data: DEMO_STATS } })),
       alertAPI.getAll({ limit:6 }).catch(() => ({ data:{ data: DEMO_ALERTS } })),
     ]).then(([s,a]) => {
-      setStats(s.data.data || DEMO_STATS)
+      setStats({ ...EMPTY_STATS, ...(s.data.data || DEMO_STATS) })
       setAlerts(a.data.data || DEMO_ALERTS)
     }).finally(() => setLoading(false))
-  }, [])
+  }, [user?.role])
 
   const workStop = alerts.find(a => a.alert_type === 'low_wallet' && !a.is_resolved)
   const s = stats || DEMO_STATS
