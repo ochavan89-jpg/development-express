@@ -53,7 +53,22 @@ router.put('/:id/complete', protect, authorize('admin','operator'), async (req, 
 
 router.put('/:id/cancel', protect, async (req, res) => {
   try {
-    await pool.query("UPDATE bookings SET status='cancelled' WHERE id=$1", [req.params.id])
+    const params = [req.params.id]
+    let q = "UPDATE bookings SET status='cancelled' WHERE id=$1"
+
+    if (req.user.role === 'client') {
+      params.push(req.user.id)
+      q += ` AND client_id=$${params.length}`
+    } else if (req.user.role === 'owner') {
+      params.push(req.user.id)
+      q += ` AND machine_id IN (SELECT id FROM machines WHERE owner_id=$${params.length})`
+    } else if (req.user.role !== 'admin') {
+      return res.status(403).json({ success:false, message:'Access denied' })
+    }
+
+    q += ' RETURNING id'
+    const { rows } = await pool.query(q, params)
+    if (!rows.length) return res.status(404).json({ success:false, message:'Booking not found' })
     res.json({ success:true, message:'Booking cancelled' })
   } catch (err) { res.status(500).json({ success:false, message:err.message }) }
 })
