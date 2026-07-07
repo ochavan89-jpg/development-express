@@ -50,6 +50,11 @@ router.post('/', protect, authorize('admin','owner'), async (req, res) => {
 
 router.put('/:id', protect, authorize('admin','owner'), async (req, res) => {
   try {
+    const { rows: existing } = await pool.query('SELECT owner_id FROM machines WHERE id=$1', [req.params.id])
+    if (!existing.length) return res.status(404).json({ success:false, message:'Machine not found' })
+    if (req.user.role === 'owner' && existing[0].owner_id !== req.user.id) {
+      return res.status(403).json({ success:false, message:'Access denied' })
+    }
     const fields = ['machine_type','model','status','current_fuel_level','fuel_capacity','rate_per_hour','current_location_lat','current_location_lng','current_location_address','hour_meter_reading','is_available']
     const updates = []
     const vals = []
