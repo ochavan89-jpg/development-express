@@ -38,6 +38,9 @@ router.put('/:id/complete', protect, authorize('admin','operator'), async (req, 
     const { actual_hours, end_fuel_reading, end_hmr } = req.body
     const { rows: br } = await pool.query('SELECT * FROM bookings WHERE id=$1', [req.params.id])
     if (!br.length) return res.status(404).json({ success:false, message:'Booking not found' })
+    if (req.user.role === 'operator' && br[0].operator_id !== req.user.id) {
+      return res.status(403).json({ success:false, message:'Access denied' })
+    }
     const totalAmount = actual_hours * br[0].hourly_rate
     const { rows } = await pool.query(
       `UPDATE bookings SET status='completed', end_time=NOW(), actual_hours=$1, total_amount=$2, end_fuel_reading=$3, end_hmr=$4 WHERE id=$5 RETURNING *`,
@@ -53,6 +56,20 @@ router.put('/:id/complete', protect, authorize('admin','operator'), async (req, 
 
 router.put('/:id/cancel', protect, async (req, res) => {
   try {
+    const { rows: br } = await pool.query(
+      `SELECT b.client_id, m.owner_id
+       FROM bookings b
+       LEFT JOIN machines m ON b.machine_id=m.id
+       WHERE b.id=$1`,
+      [req.params.id]
+    )
+    if (!br.length) return res.status(404).json({ success:false, message:'Booking not found' })
+    const booking = br[0]
+    const canCancel =
+      req.user.role === 'admin' ||
+      (req.user.role === 'client' && booking.client_id === req.user.id) ||
+      (req.user.role === 'owner' && booking.owner_id === req.user.id)
+    if (!canCancel) return res.status(403).json({ success:false, message:'Access denied' })
     await pool.query("UPDATE bookings SET status='cancelled' WHERE id=$1", [req.params.id])
     res.json({ success:true, message:'Booking cancelled' })
   } catch (err) { res.status(500).json({ success:false, message:err.message }) }
