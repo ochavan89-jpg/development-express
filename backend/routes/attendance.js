@@ -22,7 +22,7 @@ router.post('/punch-in', protect, authorize('operator'), async (req, res) => {
 
 router.put('/:id/punch-out', protect, authorize('operator'), async (req, res) => {
   try {
-    const { rows: ar } = await pool.query('SELECT * FROM attendance WHERE id=$1', [req.params.id])
+    const { rows: ar } = await pool.query('SELECT * FROM attendance WHERE id=$1 AND operator_id=$2', [req.params.id, req.user.id])
     if (!ar.length) return res.status(404).json({ success:false, message:'Record not found' })
     const hrs = (new Date() - new Date(ar[0].punch_in_time)) / 3600000
     const { rows } = await pool.query(
