@@ -55,8 +55,16 @@ router.put('/:id', protect, authorize('admin','owner'), async (req, res) => {
     const vals = []
     fields.forEach(f => { if (req.body[f] !== undefined) { vals.push(req.body[f]); updates.push(`${f}=$${vals.length}`) } })
     if (!updates.length) return res.status(400).json({ success:false, message:'No fields to update' })
+    if (req.user.role === 'owner') {
+      const { rows: existing } = await pool.query('SELECT owner_id FROM machines WHERE id=$1', [req.params.id])
+      if (!existing.length) return res.status(404).json({ success:false, message:'Machine not found' })
+      if (Number(existing[0].owner_id) !== Number(req.user.id)) {
+        return res.status(403).json({ success:false, message:'Cannot update another owner machine' })
+      }
+    }
     vals.push(req.params.id)
     const { rows } = await pool.query(`UPDATE machines SET ${updates.join(',')} WHERE id=$${vals.length} RETURNING *`, vals)
+    if (!rows.length) return res.status(404).json({ success:false, message:'Machine not found' })
     const io = req.app.get('io')
     if (io) io.to(`machine-${req.params.id}`).emit('machine-updated', rows[0])
     res.json({ success:true, data: rows[0] })
