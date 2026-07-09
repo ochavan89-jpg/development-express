@@ -1,11 +1,17 @@
 import axios from "axios";
 
+const TOKEN_KEY = "de_token";
+
 // ===============================
-// 🔥 Base URL (Render production)
+// Base URL (Render production)
 // ===============================
-const API_BASE_URL =
+const configuredBaseUrl =
   import.meta.env.VITE_API_URL ||
   "https://development-express-api.onrender.com/api";
+
+const API_BASE_URL = configuredBaseUrl.replace(/\/+$/, "").endsWith("/api")
+  ? configuredBaseUrl.replace(/\/+$/, "")
+  : `${configuredBaseUrl.replace(/\/+$/, "")}/api`;
 
 // ===============================
 // 🚀 Axios Instance
@@ -16,11 +22,11 @@ const api = axios.create({
 });
 
 // ===============================
-// 🔐 Request Interceptor (token)
+// Request Interceptor (token)
 // ===============================
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -30,14 +36,15 @@ api.interceptors.request.use(
 );
 
 // ===============================
-// ⚠️ Response Interceptor (auto logout)
+// Response Interceptor (auto logout)
 // ===============================
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("token");
-      window.location.href = "/login";
+      localStorage.removeItem(TOKEN_KEY);
+      delete api.defaults.headers.common.Authorization;
+      window.location.href = "/";
     }
     return Promise.reject(error);
   }
@@ -49,13 +56,19 @@ api.interceptors.response.use(
 export const authAPI = {
   login: (data) => api.post("/auth/login", data),
   register: (data) => api.post("/auth/register", data),
+  profile: () => api.get("/auth/profile"),
+  changePassword: (data) => api.post("/auth/change-password", data),
 };
 
 // ===============================
 // 📊 Dashboard API
 // ===============================
 export const dashboardAPI = {
-  getStats: () => api.get("/dashboard"),
+  getAdmin: () => api.get("/dashboard/admin"),
+  getOwner: () => api.get("/dashboard/owner"),
+  getClient: () => api.get("/dashboard/client"),
+  getOperator: () => api.get("/dashboard/operator"),
+  getStats: () => api.get("/dashboard/admin"),
 };
 
 // ===============================
@@ -83,7 +96,11 @@ export const usersAPI = {
 // 💰 Wallet API
 // ===============================
 export const walletAPI = {
-  getAll: () => api.get("/wallet"),
+  getBalance: () => api.get("/wallet/balance"),
+  getAllBalances: () => api.get("/wallet/all-balances"),
+  getTransactions: (params) => api.get("/wallet/transactions", { params }),
+  recharge: (data) => api.post("/wallet/recharge", data),
+  getAll: () => api.get("/wallet/all-balances"),
 };
 
 export default api;
