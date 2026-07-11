@@ -4,6 +4,9 @@ const jwt     = require('jsonwebtoken')
 const { pool } = require('../config/db')
 const { protect } = require('../middleware/auth')
 
+const isProduction = () => process.env.NODE_ENV === 'production'
+const getJwtSecret = () => process.env.JWT_SECRET || (isProduction() ? null : 'devexpress_fallback_secret')
+
 // Demo users for when DB is unavailable
 const DEMO_USERS = [
   { id:1, username:'admin',    email:'om.chavan2026@zohomail.in', role:'admin',    full_name:'Om Chavan',    phone:'9766926636', is_active:true, password_hash: '$2a$10$Xyz' },
@@ -13,11 +16,17 @@ const DEMO_USERS = [
 ]
 const DEMO_PASSWORDS = { admin:'admin123', owner:'owner123', client:'client123', operator:'operator123' }
 
-const signToken = (user) => jwt.sign(
-  { id: user.id, username: user.username, role: user.role, full_name: user.full_name, email: user.email },
-  process.env.JWT_SECRET || 'devexpress_fallback_secret',
-  { expiresIn: process.env.JWT_EXPIRE || '7d' }
-)
+const signToken = (user) => {
+  const secret = getJwtSecret()
+  if (!secret) {
+    throw new Error('JWT_SECRET is required')
+  }
+  return jwt.sign(
+    { id: user.id, username: user.username, role: user.role, full_name: user.full_name, email: user.email },
+    secret,
+    { expiresIn: process.env.JWT_EXPIRE || '7d' }
+  )
+}
 
 // ─── POST /api/auth/login ────────────────────────────────────────────────────
 router.post('/login', async (req, res) => {
@@ -37,8 +46,9 @@ router.post('/login', async (req, res) => {
         user = rows[0]
         passwordMatch = await bcrypt.compare(password, user.password_hash)
       }
-    } catch {
-      // Demo mode fallback
+    } catch (err) {
+      if (isProduction()) throw err
+      // Demo mode fallback is limited to non-production environments.
       user = DEMO_USERS.find(u => u.username === username)
       passwordMatch = user && DEMO_PASSWORDS[username] === password
     }
@@ -62,7 +72,8 @@ router.post('/login', async (req, res) => {
 // ─── POST /api/auth/register ─────────────────────────────────────────────────
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password, full_name, phone, role = 'client', company_name } = req.body
+    const { username, email, password, full_name, phone, company_name } = req.body
+    const role = 'client'
     if (!username || !email || !password || !full_name) {
       return res.status(400).json({ success:false, message:'Required fields missing' })
     }

@@ -1,6 +1,9 @@
 const jwt = require('jsonwebtoken')
 const { pool } = require('../config/db')
 
+const isProduction = () => process.env.NODE_ENV === 'production'
+const getJwtSecret = () => process.env.JWT_SECRET || (isProduction() ? null : 'devexpress_fallback_secret')
+
 const protect = async (req, res, next) => {
   try {
     const auth = req.headers.authorization
@@ -8,9 +11,13 @@ const protect = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'No token provided' })
     }
     const token = auth.split(' ')[1]
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    const secret = getJwtSecret()
+    if (!secret) {
+      return res.status(500).json({ success: false, message: 'Authentication is not configured' })
+    }
+    const decoded = jwt.verify(token, secret)
 
-    // Try DB, fallback to token payload for demo mode
+    // Production must verify current user state in the database.
     try {
       const { rows } = await pool.query(
         'SELECT id, username, email, role, full_name, phone, is_active FROM de_users WHERE id = $1',
@@ -21,7 +28,10 @@ const protect = async (req, res, next) => {
       }
       req.user = rows[0]
     } catch {
-      // Demo fallback — use token payload directly
+      if (isProduction()) {
+        return res.status(503).json({ success: false, message: 'Unable to verify user' })
+      }
+      // Demo fallback is limited to local development.
       req.user = { id: decoded.id, username: decoded.username, role: decoded.role, full_name: decoded.full_name, email: decoded.email }
     }
     next()
