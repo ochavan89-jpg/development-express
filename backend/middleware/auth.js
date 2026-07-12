@@ -1,6 +1,10 @@
 const jwt = require('jsonwebtoken')
 const { pool } = require('../config/db')
 
+const JWT_FALLBACK_SECRET = 'devexpress_fallback_secret'
+const getJwtSecret = () => process.env.JWT_SECRET || JWT_FALLBACK_SECRET
+const isProduction = () => process.env.NODE_ENV === 'production'
+
 const protect = async (req, res, next) => {
   try {
     const auth = req.headers.authorization
@@ -8,9 +12,8 @@ const protect = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'No token provided' })
     }
     const token = auth.split(' ')[1]
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    const decoded = jwt.verify(token, getJwtSecret())
 
-    // Try DB, fallback to token payload for demo mode
     try {
       const { rows } = await pool.query(
         'SELECT id, username, email, role, full_name, phone, is_active FROM de_users WHERE id = $1',
@@ -21,7 +24,10 @@ const protect = async (req, res, next) => {
       }
       req.user = rows[0]
     } catch {
-      // Demo fallback — use token payload directly
+      if (isProduction()) {
+        return res.status(503).json({ success: false, message: 'Authentication service unavailable' })
+      }
+      // Demo fallback is allowed only outside production.
       req.user = { id: decoded.id, username: decoded.username, role: decoded.role, full_name: decoded.full_name, email: decoded.email }
     }
     next()
@@ -38,4 +44,4 @@ const authorize = (...roles) => (req, res, next) => {
   next()
 }
 
-module.exports = { protect, authorize }
+module.exports = { protect, authorize, getJwtSecret }
