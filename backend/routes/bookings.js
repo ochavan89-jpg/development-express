@@ -34,26 +34,68 @@ router.post('/', protect, authorize('admin','client'), async (req, res) => {
 })
 
 router.put('/:id/complete', protect, authorize('admin','operator'), async (req, res) => {
+  let inTransaction = false
   try {
     const { actual_hours, end_fuel_reading, end_hmr } = req.body
-    const { rows: br } = await pool.query('SELECT * FROM bookings WHERE id=$1', [req.params.id])
-    if (!br.length) return res.status(404).json({ success:false, message:'Booking not found' })
-    const totalAmount = actual_hours * br[0].hourly_rate
+    const hours = Number(actual_hours)
+    if (!Number.isFinite(hours) || hours <= 0) return res.status(400).json({ success:false, message:'Invalid actual hours' })
+
+    await pool.query('BEGIN')
+    inTransaction = true
+
+    const { rows: br } = await pool.query('SELECT * FROM bookings WHERE id=$1 FOR UPDATE', [req.params.id])
+    if (!br.length) {
+      await pool.query('ROLLBACK')
+      inTransaction = false
+      return res.status(404).json({ success:false, message:'Booking not found' })
+    }
+
+    const booking = br[0]
+    if (req.user.role === 'operator' && Number(booking.operator_id) !== Number(req.user.id)) {
+      await pool.query('ROLLBACK')
+      inTransaction = false
+      return res.status(403).json({ success:false, message:'Cannot complete another operator booking' })
+    }
+    if (booking.status !== 'active') {
+      await pool.query('ROLLBACK')
+      inTransaction = false
+      return res.status(409).json({ success:false, message:'Booking is not active' })
+    }
+
+    const totalAmount = hours * Number(booking.hourly_rate)
     const { rows } = await pool.query(
       `UPDATE bookings SET status='completed', end_time=NOW(), actual_hours=$1, total_amount=$2, end_fuel_reading=$3, end_hmr=$4 WHERE id=$5 RETURNING *`,
-      [actual_hours, totalAmount, end_fuel_reading, end_hmr, req.params.id]
+      [hours, totalAmount, end_fuel_reading, end_hmr, req.params.id]
     )
-    // Deduct from wallet
-    try {
-      await pool.query('UPDATE de_users SET wallet_balance=wallet_balance-$1 WHERE id=$2', [totalAmount, br[0].client_id])
-    } catch {}
+    await pool.query('UPDATE de_users SET wallet_balance=wallet_balance-$1 WHERE id=$2', [totalAmount, booking.client_id])
+    await pool.query(
+      `INSERT INTO wallet_transactions (user_id,transaction_type,amount,balance_before,balance_after,description,reference_id)
+       SELECT id,'debit',$1,wallet_balance + $1,wallet_balance,$2,$3 FROM de_users WHERE id=$4`,
+      [totalAmount, `Work Session - Booking #${req.params.id}`, `booking:${req.params.id}`, booking.client_id]
+    )
+    await pool.query('COMMIT')
+    inTransaction = false
     res.json({ success:true, data: rows[0] })
-  } catch (err) { res.status(500).json({ success:false, message:err.message }) }
+  } catch (err) {
+    if (inTransaction) {
+      try { await pool.query('ROLLBACK') } catch {}
+    }
+    res.status(500).json({ success:false, message:err.message })
+  }
 })
 
-router.put('/:id/cancel', protect, async (req, res) => {
+router.put('/:id/cancel', protect, authorize('admin','client'), async (req, res) => {
   try {
-    await pool.query("UPDATE bookings SET status='cancelled' WHERE id=$1", [req.params.id])
+    const params = [req.params.id]
+    let q = "UPDATE bookings SET status='cancelled' WHERE id=$1 AND status <> 'completed'"
+    if (req.user.role === 'client') {
+      params.push(req.user.id)
+      q += ` AND client_id=$${params.length}`
+    }
+    const { rows } = await pool.query(`${q} RETURNING id`, params)
+    if (!rows.length) {
+      return res.status(req.user.role === 'client' ? 403 : 404).json({ success:false, message:'Booking cannot be cancelled' })
+    }
     res.json({ success:true, message:'Booking cancelled' })
   } catch (err) { res.status(500).json({ success:false, message:err.message }) }
 })
