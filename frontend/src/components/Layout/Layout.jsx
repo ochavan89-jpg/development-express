@@ -37,7 +37,7 @@ const NAV = [
 
 function Sidebar({ collapsed }) {
   const { user } = useAuth()
-  const items = NAV.filter(n => n.roles.includes(user?.role || 'admin'))
+  const items = user ? NAV.filter(n => n.roles.includes(user.role)) : []
   return (
     <aside style={{ width: collapsed ? 58 : 210, background:'var(--navy-mid)', borderRight:'1px solid var(--border)', transition:'width .25s', overflow:'hidden', flexShrink:0, position:'relative' }}>
       <nav style={{ padding:'12px 0' }}>
@@ -76,7 +76,7 @@ function Header({ onToggle }) {
   const [time, setTime] = useState(new Date())
   useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t) }, [])
 
-  const initials = (user?.full_name || 'OC').split(' ').map(n=>n[0]).join('').slice(0,2)
+  const initials = (user?.full_name || 'DE').split(' ').map(n=>n[0]).join('').slice(0,2)
 
   return (
     <header style={{ height:66, background:'rgba(10,14,26,0.97)', borderBottom:'1px solid var(--border)', backdropFilter:'blur(20px)', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 22px', position:'sticky', top:0, zIndex:100, flexShrink:0 }}>
@@ -107,7 +107,7 @@ function Header({ onToggle }) {
       <div style={{ display:'flex', alignItems:'center', gap:12 }}>
         <div style={{ background:'rgba(201,168,76,0.05)', border:'1px solid var(--border)', borderRadius:8, padding:'6px 12px', display:'flex', alignItems:'center', gap:10 }}>
           <div style={{ textAlign:'right' }}>
-            <div style={{ fontSize:13, fontWeight:600, color:'var(--gold)' }}>{user?.full_name || 'Om Chavan'}</div>
+            <div style={{ fontSize:13, fontWeight:600, color:'var(--gold)' }}>{user?.full_name}</div>
             <div style={{ fontSize:10, color:'var(--text-dim)' }}>
               {user?.role === 'admin' ? 'B.Tech Civil Engg. · MD' : user?.role}
             </div>
