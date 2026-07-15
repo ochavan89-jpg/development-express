@@ -2,7 +2,7 @@ const router  = require('express').Router()
 const bcrypt  = require('bcryptjs')
 const jwt     = require('jsonwebtoken')
 const { pool } = require('../config/db')
-const { protect } = require('../middleware/auth')
+const { protect, getJwtSecret, allowDemoFallback } = require('../middleware/auth')
 
 // Demo users for when DB is unavailable
 const DEMO_USERS = [
@@ -15,7 +15,7 @@ const DEMO_PASSWORDS = { admin:'admin123', owner:'owner123', client:'client123',
 
 const signToken = (user) => jwt.sign(
   { id: user.id, username: user.username, role: user.role, full_name: user.full_name, email: user.email },
-  process.env.JWT_SECRET || 'devexpress_fallback_secret',
+  getJwtSecret(),
   { expiresIn: process.env.JWT_EXPIRE || '7d' }
 )
 
@@ -37,8 +37,10 @@ router.post('/login', async (req, res) => {
         user = rows[0]
         passwordMatch = await bcrypt.compare(password, user.password_hash)
       }
-    } catch {
-      // Demo mode fallback
+    } catch (err) {
+      if (!allowDemoFallback()) {
+        return res.status(503).json({ success:false, message:'Authentication service unavailable' })
+      }
       user = DEMO_USERS.find(u => u.username === username)
       passwordMatch = user && DEMO_PASSWORDS[username] === password
     }
@@ -62,7 +64,7 @@ router.post('/login', async (req, res) => {
 // ─── POST /api/auth/register ─────────────────────────────────────────────────
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password, full_name, phone, role = 'client', company_name } = req.body
+    const { username, email, password, full_name, phone, company_name } = req.body
     if (!username || !email || !password || !full_name) {
       return res.status(400).json({ success:false, message:'Required fields missing' })
     }
@@ -70,7 +72,7 @@ router.post('/register', async (req, res) => {
     const { rows } = await pool.query(
       `INSERT INTO de_users (username,email,password_hash,full_name,phone,role,company_name)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id,username,email,full_name,role`,
-      [username, email, hash, full_name, phone, role, company_name]
+      [username, email, hash, full_name, phone, 'client', company_name]
     )
     const token = signToken(rows[0])
     res.status(201).json({ success:true, data:{ token, user: rows[0] } })

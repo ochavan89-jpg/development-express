@@ -24,10 +24,12 @@ router.put('/:id/punch-out', protect, authorize('operator'), async (req, res) =>
   try {
     const { rows: ar } = await pool.query('SELECT * FROM attendance WHERE id=$1', [req.params.id])
     if (!ar.length) return res.status(404).json({ success:false, message:'Record not found' })
+    if (ar[0].operator_id !== req.user.id) return res.status(403).json({ success:false, message:'Cannot punch out another operator attendance' })
+    if (ar[0].punch_out_time) return res.status(409).json({ success:false, message:'Attendance already punched out' })
     const hrs = (new Date() - new Date(ar[0].punch_in_time)) / 3600000
     const { rows } = await pool.query(
-      'UPDATE attendance SET punch_out_time=NOW(), total_hours=$1 WHERE id=$2 RETURNING *',
-      [hrs.toFixed(2), req.params.id]
+      'UPDATE attendance SET punch_out_time=NOW(), total_hours=$1 WHERE id=$2 AND operator_id=$3 RETURNING *',
+      [hrs.toFixed(2), req.params.id, req.user.id]
     )
     res.json({ success:true, data: rows[0], message:`Punched out. Total: ${hrs.toFixed(1)} hours` })
   } catch (err) { res.status(500).json({ success:false, message:err.message }) }
