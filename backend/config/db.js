@@ -1,7 +1,17 @@
 const { Pool } = require('pg')
 
+const dbConfig = process.env.DATABASE_URL
+  ? { connectionString: process.env.DATABASE_URL }
+  : {
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT ? Number(process.env.DB_PORT) : undefined,
+      database: process.env.DB_NAME,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+    }
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  ...dbConfig,
   ssl: process.env.NODE_ENV === 'production'
     ? { rejectUnauthorized: false }
     : false,
@@ -11,7 +21,7 @@ const pool = new Pool({
 })
 
 pool.on('error', (err) => {
-  console.error('❌ PostgreSQL pool error:', err.message)
+  console.error('PostgreSQL pool error:', err.message)
 })
 
 const testConnection = async () => {
@@ -19,11 +29,11 @@ const testConnection = async () => {
     const client = await pool.connect()
     const res = await client.query('SELECT NOW()')
     client.release()
-    console.log('✅ Database connected:', res.rows[0].now)
+    console.log('Database connected:', res.rows[0].now)
     return true
   } catch (err) {
-    console.error('❌ Database connection failed:', err.message)
-    console.log('⚠️ Running without database (demo mode)')
+    console.error('Database connection failed:', err.message)
+    console.log('Running without database (demo mode)')
     return false
   }
 }
