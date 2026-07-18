@@ -34,25 +34,51 @@ router.post('/', protect, authorize('admin','client'), async (req, res) => {
 })
 
 router.put('/:id/complete', protect, authorize('admin','operator'), async (req, res) => {
+  const client = await pool.connect()
   try {
     const { actual_hours, end_fuel_reading, end_hmr } = req.body
-    const { rows: br } = await pool.query('SELECT * FROM bookings WHERE id=$1', [req.params.id])
-    if (!br.length) return res.status(404).json({ success:false, message:'Booking not found' })
+    await client.query('BEGIN')
+    const { rows: br } = await client.query('SELECT * FROM bookings WHERE id=$1 FOR UPDATE', [req.params.id])
+    if (!br.length) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ success:false, message:'Booking not found' })
+    }
+    if (req.user.role === 'operator' && br[0].operator_id !== req.user.id) {
+      await client.query('ROLLBACK')
+      return res.status(403).json({ success:false, message:'Cannot complete another operator\'s booking' })
+    }
+    if (br[0].status === 'completed') {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ success:false, message:'Booking already completed' })
+    }
     const totalAmount = actual_hours * br[0].hourly_rate
-    const { rows } = await pool.query(
+    const { rows } = await client.query(
       `UPDATE bookings SET status='completed', end_time=NOW(), actual_hours=$1, total_amount=$2, end_fuel_reading=$3, end_hmr=$4 WHERE id=$5 RETURNING *`,
       [actual_hours, totalAmount, end_fuel_reading, end_hmr, req.params.id]
     )
-    // Deduct from wallet
-    try {
-      await pool.query('UPDATE de_users SET wallet_balance=wallet_balance-$1 WHERE id=$2', [totalAmount, br[0].client_id])
-    } catch {}
+    await client.query('UPDATE de_users SET wallet_balance=wallet_balance-$1 WHERE id=$2', [totalAmount, br[0].client_id])
+    await client.query('COMMIT')
     res.json({ success:true, data: rows[0] })
-  } catch (err) { res.status(500).json({ success:false, message:err.message }) }
+  } catch (err) {
+    try { await client.query('ROLLBACK') } catch {}
+    res.status(500).json({ success:false, message:err.message })
+  } finally {
+    client.release()
+  }
 })
 
 router.put('/:id/cancel', protect, async (req, res) => {
   try {
+    const { rows: br } = await pool.query(
+      'SELECT b.client_id, m.owner_id FROM bookings b LEFT JOIN machines m ON b.machine_id=m.id WHERE b.id=$1',
+      [req.params.id]
+    )
+    if (!br.length) return res.status(404).json({ success:false, message:'Booking not found' })
+    const canCancel =
+      req.user.role === 'admin' ||
+      (req.user.role === 'client' && br[0].client_id === req.user.id) ||
+      (req.user.role === 'owner' && br[0].owner_id === req.user.id)
+    if (!canCancel) return res.status(403).json({ success:false, message:'Cannot cancel this booking' })
     await pool.query("UPDATE bookings SET status='cancelled' WHERE id=$1", [req.params.id])
     res.json({ success:true, message:'Booking cancelled' })
   } catch (err) { res.status(500).json({ success:false, message:err.message }) }
