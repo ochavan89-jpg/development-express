@@ -34,22 +34,27 @@ app.use("/api", limiter);
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,
-    message: "🚀 DEVELOPMENT EXPRESS API RUNNING",
+    message: "DEVELOPMENT EXPRESS API RUNNING",
   });
 });
 
 /* ===============================
-   Auth Routes (example)
-   👉 तुझा auth.js असेल तर ठेव
+   API Routes
 ================================ */
-// const authRoutes = require("./routes/auth");
-// app.use("/api/auth", authRoutes);
+app.use("/api/auth", require("./routes/auth"));
+app.use("/api/machines", require("./routes/machines"));
+app.use("/api/bookings", require("./routes/bookings"));
+app.use("/api/wallet", require("./routes/wallet"));
+app.use("/api/dashboard", require("./routes/dashboard"));
+app.use("/api/alerts", require("./routes/alerts"));
+app.use("/api/users", require("./routes/users"));
+app.use("/api/attendance", require("./routes/attendance"));
 
 /* ===============================
    Root Route
 ================================ */
 app.get("/", (req, res) => {
-  res.send("✅ Development Express Backend Live");
+  res.send("Development Express Backend Live");
 });
 
 /* ===============================
@@ -57,9 +62,13 @@ app.get("/", (req, res) => {
 ================================ */
 const PORT = process.env.PORT || 10000;
 
-app.listen(PORT, () => {
-  console.log("=================================");
-  console.log("🚀 DEVELOPMENT EXPRESS API SERVER");
-  console.log(`🌐 Server running on port ${PORT}`);
-  console.log("=================================");
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log("=================================");
+    console.log("DEVELOPMENT EXPRESS API SERVER");
+    console.log(`Server running on port ${PORT}`);
+    console.log("=================================");
+  });
+}
+
+module.exports = app;
