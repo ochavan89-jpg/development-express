@@ -13,9 +13,12 @@ const DEMO_USERS = [
 ]
 const DEMO_PASSWORDS = { admin:'admin123', owner:'owner123', client:'client123', operator:'operator123' }
 
+const allowDemoFallback = () => process.env.NODE_ENV !== 'production'
+const jwtSecret = () => process.env.JWT_SECRET || 'devexpress_fallback_secret'
+
 const signToken = (user) => jwt.sign(
   { id: user.id, username: user.username, role: user.role, full_name: user.full_name, email: user.email },
-  process.env.JWT_SECRET || 'devexpress_fallback_secret',
+  jwtSecret(),
   { expiresIn: process.env.JWT_EXPIRE || '7d' }
 )
 
@@ -37,8 +40,11 @@ router.post('/login', async (req, res) => {
         user = rows[0]
         passwordMatch = await bcrypt.compare(password, user.password_hash)
       }
-    } catch {
-      // Demo mode fallback
+    } catch (err) {
+      if (!allowDemoFallback()) {
+        return res.status(503).json({ success:false, message:'Authentication service unavailable' })
+      }
+      // Demo mode fallback outside production
       user = DEMO_USERS.find(u => u.username === username)
       passwordMatch = user && DEMO_PASSWORDS[username] === password
     }
@@ -62,7 +68,8 @@ router.post('/login', async (req, res) => {
 // ─── POST /api/auth/register ─────────────────────────────────────────────────
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password, full_name, phone, role = 'client', company_name } = req.body
+    const { username, email, password, full_name, phone, company_name } = req.body
+    const role = 'client'
     if (!username || !email || !password || !full_name) {
       return res.status(400).json({ success:false, message:'Required fields missing' })
     }
