@@ -1,6 +1,7 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "./context/AuthContext";
+import { useAuth } from "./context/AuthContext";
 
 import Layout from "./components/Layout/Layout";
 import Login from "./pages/Login";
@@ -12,6 +13,25 @@ import Operators from "./pages/Operators";
 import Bookings from "./pages/Bookings";
 import Users from "./pages/Users";
 
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
+
+  return children;
+}
+
+function PublicRoute({ children }) {
+  const { user, loading } = useAuth();
+
+  if (loading) return null;
+  if (user) return <Navigate to="/dashboard" replace />;
+
+  return children;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -19,9 +39,10 @@ export default function App() {
         <Toaster position="bottom-right" />
 
         <Routes>
-          <Route path="/" element={<Login />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
 
-          <Route element={<Layout />}>
+          <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/machines" element={<Machines />} />
             <Route path="/wallet" element={<Wallet />} />
@@ -30,6 +51,7 @@ export default function App() {
             <Route path="/bookings" element={<Bookings />} />
             <Route path="/users" element={<Users />} />
           </Route>
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
 
       </BrowserRouter>
