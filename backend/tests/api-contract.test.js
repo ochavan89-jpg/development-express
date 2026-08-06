@@ -107,7 +107,11 @@ test('production login fails closed when the database is unavailable', async (t)
 
   t.after(() => {
     pool.query = originalQuery
-    process.env.NODE_ENV = originalNodeEnv
+    if (originalNodeEnv === undefined) {
+      delete process.env.NODE_ENV
+    } else {
+      process.env.NODE_ENV = originalNodeEnv
+    }
     server.close()
   })
 
@@ -151,7 +155,7 @@ test('clients cannot cancel another client booking', async (t) => {
 
   const token = jwt.sign(
     { id: 7, username: 'client-a', role: 'client', full_name: 'Client A', email: 'a@example.com' },
-    'devexpress_fallback_secret'
+    process.env.JWT_SECRET || 'devexpress_fallback_secret'
   )
 
   const res = await request(server, 'PUT', '/api/bookings/99/cancel', null, {
