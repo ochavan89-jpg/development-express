@@ -44,6 +44,10 @@ router.post('/login', async (req, res) => {
         passwordMatch = await bcrypt.compare(password, user.password_hash)
       }
     } catch {
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(503).json({ success:false, message:'Authentication service unavailable' })
+      }
+
       // Demo mode fallback
       user = DEMO_USERS.find(u => u.username === username)
       passwordMatch = user && DEMO_PASSWORDS[username] === password
