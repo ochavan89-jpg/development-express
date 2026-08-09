@@ -66,16 +66,17 @@ test('protected route is mounted and requires a token', async () => {
   assert.equal(res.body.message, 'No token provided')
 })
 
-test('profile accepts tokens signed with the same fallback secret used by login', async () => {
+test('profile accepts tokens signed with the same effective secret used by login', async () => {
   const originalQuery = pool.query
   pool.query = async () => {
     throw new Error('database unavailable')
   }
 
   try {
+    const secret = process.env.JWT_SECRET || 'devexpress_fallback_secret'
     const token = jwt.sign(
       { id: 123, username: 'client', role: 'client', full_name: 'Client User', email: 'client@example.test' },
-      'devexpress_fallback_secret'
+      secret
     )
     const res = await request('GET', '/api/auth/profile', {
       headers: { authorization: `Bearer ${token}` },
