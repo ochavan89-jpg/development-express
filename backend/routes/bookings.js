@@ -53,6 +53,14 @@ router.put('/:id/complete', protect, authorize('admin','operator'), async (req, 
 
 router.put('/:id/cancel', protect, async (req, res) => {
   try {
+    const { rows } = await pool.query('SELECT client_id, status FROM bookings WHERE id=$1', [req.params.id])
+    if (!rows.length) return res.status(404).json({ success:false, message:'Booking not found' })
+    if (req.user.role !== 'admin' && String(rows[0].client_id) !== String(req.user.id)) {
+      return res.status(403).json({ success:false, message:'Cannot cancel another client booking' })
+    }
+    if (rows[0].status === 'completed') {
+      return res.status(400).json({ success:false, message:'Completed bookings cannot be cancelled' })
+    }
     await pool.query("UPDATE bookings SET status='cancelled' WHERE id=$1", [req.params.id])
     res.json({ success:true, message:'Booking cancelled' })
   } catch (err) { res.status(500).json({ success:false, message:err.message }) }
