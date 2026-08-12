@@ -5,9 +5,13 @@ const TOKEN_KEY = "de_token";
 // ===============================
 // 🔥 Base URL (Render production)
 // ===============================
-const API_BASE_URL =
+const rawApiBaseUrl =
   import.meta.env.VITE_API_URL ||
   "https://development-express-api.onrender.com/api";
+const normalizedApiBaseUrl = rawApiBaseUrl.replace(/\/+$/, "");
+const API_BASE_URL = normalizedApiBaseUrl.endsWith("/api")
+  ? normalizedApiBaseUrl
+  : `${normalizedApiBaseUrl}/api`;
 
 // ===============================
 // 🚀 Axios Instance
