@@ -50,7 +50,8 @@ test.after(() => {
   db.pool.end()
 })
 
-test('mounts auth router and clamps public registration to client role', async () => {
+test('critical API contracts', async (t) => {
+await t.test('mounts auth router and clamps public registration to client role', async () => {
   db.pool.query = async (sql, params) => {
     assert.match(sql, /INSERT INTO de_users/)
     assert.equal(params[5], 'client')
@@ -77,7 +78,7 @@ test('mounts auth router and clamps public registration to client role', async (
   assert.equal(res.body.data.user.role, 'client')
 })
 
-test('verifies fallback-signed JWTs on mounted protected routes', async () => {
+await t.test('verifies fallback-signed JWTs on mounted protected routes', async () => {
   db.pool.query = async () => ({
     rows: [{
       id: 7,
@@ -101,7 +102,7 @@ test('verifies fallback-signed JWTs on mounted protected routes', async () => {
   assert.equal(res.body.data.id, 7)
 })
 
-test('fails closed instead of demo admin login when production DB auth fails', async () => {
+await t.test('fails closed instead of demo admin login when production DB auth fails', async () => {
   db.pool.query = async () => {
     throw new Error('database unavailable')
   }
@@ -115,7 +116,7 @@ test('fails closed instead of demo admin login when production DB auth fails', a
   assert.equal(res.body.success, false)
 })
 
-test('prevents clients from cancelling another client booking', async () => {
+await t.test('prevents clients from cancelling another client booking', async () => {
   db.pool.query = async (sql) => {
     if (/SELECT id, username, email, role, full_name, phone, is_active FROM de_users/.test(sql)) {
       return {
@@ -144,4 +145,5 @@ test('prevents clients from cancelling another client booking', async () => {
   const res = await request('PUT', '/api/bookings/42/cancel', null, token)
 
   assert.equal(res.status, 403)
+})
 })
