@@ -147,4 +147,51 @@ await t.test('prevents clients from cancelling another client booking', async ()
 
   assert.equal(res.status, 403)
 })
+
+await t.test('does not complete booking when wallet debit fails', async () => {
+  const queries = []
+  db.pool.query = async () => ({
+    rows: [{
+      id: 2,
+      username: 'operator',
+      email: 'operator@example.com',
+      role: 'operator',
+      full_name: 'Operator User',
+      phone: null,
+      is_active: true,
+    }],
+  })
+  db.pool.connect = async () => ({
+    query: async (sql) => {
+      queries.push(sql)
+      if (sql === 'BEGIN' || sql === 'ROLLBACK') return { rows: [], rowCount: null }
+      if (/SELECT \* FROM bookings/.test(sql)) {
+        return { rows: [{ id: 42, client_id: 7, hourly_rate: 1000, status: 'active' }] }
+      }
+      if (/UPDATE bookings SET status='completed'/.test(sql)) {
+        return { rows: [{ id: 42, status: 'completed', total_amount: 2000 }], rowCount: 1 }
+      }
+      if (/UPDATE de_users SET wallet_balance=wallet_balance-\$1/.test(sql)) {
+        throw new Error('wallet unavailable')
+      }
+      throw new Error(`unexpected query: ${sql}`)
+    },
+    release: () => {},
+  })
+
+  const token = jwt.sign(
+    { id: 2, username: 'operator', email: 'operator@example.com', role: 'operator', full_name: 'Operator User' },
+    'devexpress_fallback_secret'
+  )
+
+  const res = await request('PUT', '/api/bookings/42/complete', {
+    actual_hours: 2,
+    end_fuel_reading: 10,
+    end_hmr: 100,
+  }, token)
+
+  assert.equal(res.status, 500)
+  assert.equal(res.body.success, false)
+  assert.ok(queries.includes('ROLLBACK'))
+})
 })
