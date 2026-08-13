@@ -8,6 +8,7 @@ delete process.env.JWT_SECRET
 
 const db = require('../config/db')
 const app = require('../server')
+delete process.env.JWT_SECRET
 
 const request = (method, path, body, token) => new Promise((resolve, reject) => {
   const server = http.createServer(app)
