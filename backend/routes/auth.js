@@ -19,6 +19,8 @@ const signToken = (user) => jwt.sign(
   { expiresIn: process.env.JWT_EXPIRE || '7d' }
 )
 
+const isProduction = process.env.NODE_ENV === 'production'
+
 // ─── POST /api/auth/login ────────────────────────────────────────────────────
 router.post('/login', async (req, res) => {
   try {
@@ -37,7 +39,8 @@ router.post('/login', async (req, res) => {
         user = rows[0]
         passwordMatch = await bcrypt.compare(password, user.password_hash)
       }
-    } catch {
+    } catch (err) {
+      if (isProduction) throw err
       // Demo mode fallback
       user = DEMO_USERS.find(u => u.username === username)
       passwordMatch = user && DEMO_PASSWORDS[username] === password
@@ -62,7 +65,7 @@ router.post('/login', async (req, res) => {
 // ─── POST /api/auth/register ─────────────────────────────────────────────────
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password, full_name, phone, role = 'client', company_name } = req.body
+    const { username, email, password, full_name, phone, company_name } = req.body
     if (!username || !email || !password || !full_name) {
       return res.status(400).json({ success:false, message:'Required fields missing' })
     }
@@ -70,7 +73,7 @@ router.post('/register', async (req, res) => {
     const { rows } = await pool.query(
       `INSERT INTO de_users (username,email,password_hash,full_name,phone,role,company_name)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id,username,email,full_name,role`,
-      [username, email, hash, full_name, phone, role, company_name]
+      [username, email, hash, full_name, phone, 'client', company_name]
     )
     const token = signToken(rows[0])
     res.status(201).json({ success:true, data:{ token, user: rows[0] } })
