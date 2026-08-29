@@ -12,6 +12,7 @@ const DEMO_USERS = [
   { id:4, username:'operator', email:'operator@developmentexpress.in', role:'operator', full_name:'Ramesh Kumar', phone:'9876543213', is_active:true, password_hash: '$2a$10$Xyz' },
 ]
 const DEMO_PASSWORDS = { admin:'admin123', owner:'owner123', client:'client123', operator:'operator123' }
+const allowDemoAuth = () => process.env.NODE_ENV !== 'production'
 
 const signToken = (user) => jwt.sign(
   { id: user.id, username: user.username, role: user.role, full_name: user.full_name, email: user.email },
@@ -37,7 +38,8 @@ router.post('/login', async (req, res) => {
         user = rows[0]
         passwordMatch = await bcrypt.compare(password, user.password_hash)
       }
-    } catch {
+    } catch (err) {
+      if (!allowDemoAuth()) throw err
       // Demo mode fallback
       user = DEMO_USERS.find(u => u.username === username)
       passwordMatch = user && DEMO_PASSWORDS[username] === password
@@ -62,7 +64,8 @@ router.post('/login', async (req, res) => {
 // ─── POST /api/auth/register ─────────────────────────────────────────────────
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password, full_name, phone, role = 'client', company_name } = req.body
+    const { username, email, password, full_name, phone, company_name } = req.body
+    const role = 'client'
     if (!username || !email || !password || !full_name) {
       return res.status(400).json({ success:false, message:'Required fields missing' })
     }
