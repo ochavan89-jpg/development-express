@@ -1,7 +1,17 @@
 const { Pool } = require('pg')
 
-const pool = new Pool({
+const connectionConfig = process.env.DATABASE_URL ? {
   connectionString: process.env.DATABASE_URL,
+} : {
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT || '5432', 10),
+  database: process.env.DB_NAME || 'development_express',
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || 'password',
+}
+
+const pool = new Pool({
+  ...connectionConfig,
   ssl: process.env.NODE_ENV === 'production'
     ? { rejectUnauthorized: false }
     : false,
