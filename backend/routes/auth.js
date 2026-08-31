@@ -4,6 +4,16 @@ const jwt     = require('jsonwebtoken')
 const { pool } = require('../config/db')
 const { protect } = require('../middleware/auth')
 
+const JWT_FALLBACK_SECRET = 'devexpress_fallback_secret'
+
+const isProduction = () => process.env.NODE_ENV === 'production'
+
+const getJwtSecret = () => {
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET
+  if (isProduction()) throw new Error('JWT secret is not configured')
+  return JWT_FALLBACK_SECRET
+}
+
 // Demo users for when DB is unavailable
 const DEMO_USERS = [
   { id:1, username:'admin',    email:'om.chavan2026@zohomail.in', role:'admin',    full_name:'Om Chavan',    phone:'9766926636', is_active:true, password_hash: '$2a$10$Xyz' },
@@ -15,7 +25,7 @@ const DEMO_PASSWORDS = { admin:'admin123', owner:'owner123', client:'client123',
 
 const signToken = (user) => jwt.sign(
   { id: user.id, username: user.username, role: user.role, full_name: user.full_name, email: user.email },
-  process.env.JWT_SECRET || 'devexpress_fallback_secret',
+  getJwtSecret(),
   { expiresIn: process.env.JWT_EXPIRE || '7d' }
 )
 
@@ -37,7 +47,11 @@ router.post('/login', async (req, res) => {
         user = rows[0]
         passwordMatch = await bcrypt.compare(password, user.password_hash)
       }
-    } catch {
+    } catch (err) {
+      if (isProduction()) {
+        console.error('Login database lookup failed:', err.message)
+        return res.status(503).json({ success:false, message:'Authentication temporarily unavailable' })
+      }
       // Demo mode fallback
       user = DEMO_USERS.find(u => u.username === username)
       passwordMatch = user && DEMO_PASSWORDS[username] === password
@@ -62,7 +76,8 @@ router.post('/login', async (req, res) => {
 // ─── POST /api/auth/register ─────────────────────────────────────────────────
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password, full_name, phone, role = 'client', company_name } = req.body
+    const { username, email, password, full_name, phone, company_name } = req.body
+    const role = 'client'
     if (!username || !email || !password || !full_name) {
       return res.status(400).json({ success:false, message:'Required fields missing' })
     }

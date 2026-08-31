@@ -1,6 +1,20 @@
 const jwt = require('jsonwebtoken')
 const { pool } = require('../config/db')
 
+const JWT_FALLBACK_SECRET = 'devexpress_fallback_secret'
+
+const isProduction = () => process.env.NODE_ENV === 'production'
+
+const getJwtSecret = () => {
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET
+  if (isProduction()) {
+    const err = new Error('JWT secret is not configured')
+    err.statusCode = 500
+    throw err
+  }
+  return JWT_FALLBACK_SECRET
+}
+
 const protect = async (req, res, next) => {
   try {
     const auth = req.headers.authorization
@@ -8,7 +22,7 @@ const protect = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'No token provided' })
     }
     const token = auth.split(' ')[1]
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    const decoded = jwt.verify(token, getJwtSecret())
 
     // Try DB, fallback to token payload for demo mode
     try {
@@ -20,12 +34,17 @@ const protect = async (req, res, next) => {
         return res.status(401).json({ success: false, message: 'User not found or inactive' })
       }
       req.user = rows[0]
-    } catch {
+    } catch (err) {
+      if (isProduction()) {
+        console.error('Authentication database lookup failed:', err.message)
+        return res.status(503).json({ success: false, message: 'Authentication temporarily unavailable' })
+      }
       // Demo fallback — use token payload directly
       req.user = { id: decoded.id, username: decoded.username, role: decoded.role, full_name: decoded.full_name, email: decoded.email }
     }
     next()
   } catch (err) {
+    if (err.statusCode) return res.status(err.statusCode).json({ success: false, message: 'Authentication configuration error' })
     if (err.name === 'TokenExpiredError') return res.status(401).json({ success: false, message: 'Token expired' })
     return res.status(401).json({ success: false, message: 'Invalid token' })
   }
