@@ -162,3 +162,99 @@ test('clients cannot cancel bookings owned by other clients', async () => {
   assert.equal(res.status, 403)
   assert.equal(updateCalled, false)
 })
+
+test('wallet recharge rolls back when the ledger insert fails', async () => {
+  const queries = []
+  let released = false
+
+  pool.query = async (sql) => {
+    if (sql.includes('SELECT id, username, email, role, full_name, phone, is_active FROM de_users')) {
+      return {
+        rows: [{
+          id: 1,
+          username: 'admin',
+          email: 'admin@example.com',
+          role: 'admin',
+          full_name: 'Admin User',
+          is_active: true,
+        }],
+      }
+    }
+    throw new Error(`Unexpected query: ${sql}`)
+  }
+
+  pool.connect = async () => ({
+    query: async (sql) => {
+      queries.push(sql)
+      if (sql === 'BEGIN' || sql === 'ROLLBACK') return { rows: [] }
+      if (sql.includes('SELECT wallet_balance FROM de_users')) return { rows: [{ wallet_balance: '1000' }] }
+      if (sql.includes('UPDATE de_users SET wallet_balance')) return { rows: [] }
+      if (sql.includes('INSERT INTO wallet_transactions')) throw new Error('ledger insert failed')
+      throw new Error(`Unexpected transaction query: ${sql}`)
+    },
+    release: () => { released = true },
+  })
+
+  const res = await request('/api/wallet/recharge', {
+    method: 'POST',
+    token: makeToken({ id: 1, role: 'admin' }),
+    body: { user_id: 3, amount: 500, reference_id: 'test-ref' },
+  })
+
+  assert.equal(res.status, 500)
+  assert.ok(queries.includes('BEGIN'))
+  assert.ok(queries.includes('ROLLBACK'))
+  assert.equal(queries.includes('COMMIT'), false)
+  assert.equal(released, true)
+})
+
+test('booking completion rolls back booking and wallet updates when ledger insert fails', async () => {
+  const queries = []
+  let released = false
+
+  pool.query = async (sql) => {
+    if (sql.includes('SELECT id, username, email, role, full_name, phone, is_active FROM de_users')) {
+      return {
+        rows: [{
+          id: 5,
+          username: 'operator',
+          email: 'operator@example.com',
+          role: 'operator',
+          full_name: 'Operator User',
+          is_active: true,
+        }],
+      }
+    }
+    throw new Error(`Unexpected query: ${sql}`)
+  }
+
+  pool.connect = async () => ({
+    query: async (sql) => {
+      queries.push(sql)
+      if (sql === 'BEGIN' || sql === 'ROLLBACK') return { rows: [] }
+      if (sql.includes('SELECT * FROM bookings')) {
+        return { rows: [{ id: 123, operator_id: 5, client_id: 10, hourly_rate: '100' }] }
+      }
+      if (sql.includes("UPDATE bookings SET status='completed'")) {
+        return { rows: [{ id: 123, status: 'completed' }] }
+      }
+      if (sql.includes('SELECT wallet_balance FROM de_users')) return { rows: [{ wallet_balance: '1000' }] }
+      if (sql.includes('UPDATE de_users SET wallet_balance')) return { rows: [] }
+      if (sql.includes('INSERT INTO wallet_transactions')) throw new Error('ledger insert failed')
+      throw new Error(`Unexpected transaction query: ${sql}`)
+    },
+    release: () => { released = true },
+  })
+
+  const res = await request('/api/bookings/123/complete', {
+    method: 'PUT',
+    token: makeToken({ id: 5, role: 'operator' }),
+    body: { actual_hours: 2, end_fuel_reading: 80, end_hmr: 1200 },
+  })
+
+  assert.equal(res.status, 500)
+  assert.ok(queries.includes('BEGIN'))
+  assert.ok(queries.includes('ROLLBACK'))
+  assert.equal(queries.includes('COMMIT'), false)
+  assert.equal(released, true)
+})
