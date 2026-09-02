@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "./context/AuthContext";
 
@@ -20,6 +20,7 @@ export default function App() {
 
         <Routes>
           <Route path="/" element={<Login />} />
+          <Route path="/login" element={<Login />} />
 
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />
@@ -30,6 +31,8 @@ export default function App() {
             <Route path="/bookings" element={<Bookings />} />
             <Route path="/users" element={<Users />} />
           </Route>
+
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
 
       </BrowserRouter>
