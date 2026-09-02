@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Outlet, NavLink } from 'react-router-dom'
+import { Navigate, Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 
 /* ─── SHIELD SVG ─── */
@@ -128,6 +128,11 @@ function Header({ onToggle }) {
 /* ─── LAYOUT ─── */
 export default function Layout() {
   const [collapsed, setCollapsed] = useState(false)
+  const { user, loading } = useAuth()
+
+  if (loading) return null
+  if (!user) return <Navigate to="/login" replace />
+
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100vh' }}>
       <Header onToggle={() => setCollapsed(p=>!p)} />
