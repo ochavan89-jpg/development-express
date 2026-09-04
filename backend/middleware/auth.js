@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken')
 const { pool } = require('../config/db')
+const { getJwtSecret, isProduction } = require('../config/auth')
 
 const protect = async (req, res, next) => {
   try {
@@ -8,7 +9,7 @@ const protect = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'No token provided' })
     }
     const token = auth.split(' ')[1]
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    const decoded = jwt.verify(token, getJwtSecret())
 
     // Try DB, fallback to token payload for demo mode
     try {
@@ -21,6 +22,9 @@ const protect = async (req, res, next) => {
       }
       req.user = rows[0]
     } catch {
+      if (isProduction()) {
+        return res.status(503).json({ success: false, message: 'Authentication service unavailable' })
+      }
       // Demo fallback — use token payload directly
       req.user = { id: decoded.id, username: decoded.username, role: decoded.role, full_name: decoded.full_name, email: decoded.email }
     }

@@ -3,9 +3,13 @@ import axios from "axios";
 // ===============================
 // 🔥 Base URL (Render production)
 // ===============================
-const API_BASE_URL =
+const configuredApiUrl =
   import.meta.env.VITE_API_URL ||
   "https://development-express-api.onrender.com/api";
+const trimmedApiUrl = configuredApiUrl.replace(/\/+$/, "");
+const API_BASE_URL = trimmedApiUrl.endsWith("/api")
+  ? trimmedApiUrl
+  : `${trimmedApiUrl}/api`;
 
 // ===============================
 // 🚀 Axios Instance
@@ -20,7 +24,7 @@ const api = axios.create({
 // ===============================
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("de_token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -36,8 +40,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("token");
-      window.location.href = "/login";
+      localStorage.removeItem("de_token");
+      if (window.location.pathname !== "/") window.location.href = "/";
     }
     return Promise.reject(error);
   }
@@ -55,21 +59,34 @@ export const authAPI = {
 // 📊 Dashboard API
 // ===============================
 export const dashboardAPI = {
-  getStats: () => api.get("/dashboard"),
+  getAdmin: () => api.get("/dashboard/admin"),
+  getOwner: () => api.get("/dashboard/owner"),
+  getClient: () => api.get("/dashboard/client"),
+  getOperator: () => api.get("/dashboard/operator"),
 };
 
 // ===============================
 // 🚨 Alerts API
 // ===============================
 export const alertAPI = {
-  getAll: () => api.get("/alerts"),
+  getAll: (params) => api.get("/alerts", { params }),
 };
 
 // ===============================
 // ⚙️ Machines API
 // ===============================
 export const machinesAPI = {
-  getAll: () => api.get("/machines"),
+  getAll: (params) => api.get("/machines", { params }),
+};
+
+// ===============================
+// 📋 Bookings API
+// ===============================
+export const bookingAPI = {
+  getAll: (params) => api.get("/bookings", { params }),
+  create: (data) => api.post("/bookings", data),
+  complete: (id, data) => api.put(`/bookings/${id}/complete`, data),
+  cancel: (id) => api.put(`/bookings/${id}/cancel`),
 };
 
 // ===============================
@@ -83,7 +100,10 @@ export const usersAPI = {
 // 💰 Wallet API
 // ===============================
 export const walletAPI = {
-  getAll: () => api.get("/wallet"),
+  getBalance: () => api.get("/wallet/balance"),
+  getAllBalances: () => api.get("/wallet/all-balances"),
+  getTransactions: (params) => api.get("/wallet/transactions", { params }),
+  recharge: (data) => api.post("/wallet/recharge", data),
 };
 
 export default api;
