@@ -80,6 +80,16 @@ export const machinesAPI = {
 };
 
 // ===============================
+// 📋 Bookings API
+// ===============================
+export const bookingAPI = {
+  getAll: (params) => api.get("/bookings", { params }),
+  create: (data) => api.post("/bookings", data),
+  complete: (id, data) => api.put(`/bookings/${id}/complete`, data),
+  cancel: (id) => api.put(`/bookings/${id}/cancel`),
+};
+
+// ===============================
 // 👥 Users API
 // ===============================
 export const usersAPI = {

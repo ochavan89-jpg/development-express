@@ -34,6 +34,12 @@ function ProtectedLayout() {
   return <Layout />;
 }
 
+function RequireRole({ roles, children }) {
+  const { user } = useAuth();
+  if (!roles.includes(user?.role)) return <Navigate to="/dashboard" replace />;
+  return children;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -45,12 +51,12 @@ export default function App() {
 
           <Route element={<ProtectedLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/machines" element={<Machines />} />
-            <Route path="/wallet" element={<Wallet />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/operators" element={<Operators />} />
-            <Route path="/bookings" element={<Bookings />} />
-            <Route path="/users" element={<Users />} />
+            <Route path="/machines" element={<RequireRole roles={["admin","owner"]}><Machines /></RequireRole>} />
+            <Route path="/wallet" element={<RequireRole roles={["admin","owner","client"]}><Wallet /></RequireRole>} />
+            <Route path="/reports" element={<RequireRole roles={["admin","owner"]}><Reports /></RequireRole>} />
+            <Route path="/operators" element={<RequireRole roles={["admin"]}><Operators /></RequireRole>} />
+            <Route path="/bookings" element={<RequireRole roles={["admin","owner","client","operator"]}><Bookings /></RequireRole>} />
+            <Route path="/users" element={<RequireRole roles={["admin"]}><Users /></RequireRole>} />
           </Route>
         </Routes>
 

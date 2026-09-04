@@ -125,6 +125,32 @@ test('client booking creation uses the server-side machine rate', async () => {
   assert.equal(insertedRate, 1500)
 })
 
+test('operator booking list is scoped to assigned bookings', async () => {
+  let listSql
+  let listParams
+  pool.query = async (sql, params) => {
+    if (/SELECT id, username/.test(sql)) {
+      return { rows: [{ id: 9, username: 'operator', role: 'operator', full_name: 'Operator', email: 'operator@example.com', is_active: true }] }
+    }
+    if (/SELECT b\.\*/.test(sql)) {
+      listSql = sql
+      listParams = params
+      return { rows: [] }
+    }
+    throw new Error(`unexpected query: ${sql}`)
+  }
+
+  const res = await request('/api/bookings', {
+    headers: {
+      authorization: `Bearer ${tokenFor({ id: 9, username: 'operator', role: 'operator', full_name: 'Operator', email: 'operator@example.com' })}`,
+    },
+  })
+
+  assert.equal(res.status, 200)
+  assert.match(listSql, /b\.operator_id=\$1/)
+  assert.deepEqual(listParams, [9])
+})
+
 test('booking completion updates booking, wallet, and ledger in one transaction', async () => {
   const queries = []
   const client = {
