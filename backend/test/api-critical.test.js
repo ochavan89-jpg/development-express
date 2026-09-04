@@ -90,6 +90,41 @@ test('production login fails closed when the database is unavailable', async () 
   assert.equal(res.status, 503)
 })
 
+test('client booking creation uses the server-side machine rate', async () => {
+  let insertedRate
+  pool.query = async (sql, params) => {
+    if (/SELECT id, username/.test(sql)) {
+      return { rows: [{ id: 3, username: 'client', role: 'client', full_name: 'Client', email: 'client@example.com', is_active: true }] }
+    }
+    if (/SELECT rate_per_hour FROM machines/.test(sql)) return { rows: [{ rate_per_hour: '1500.00' }] }
+    if (/INSERT INTO bookings/.test(sql)) {
+      insertedRate = params[5]
+      return { rows: [{ id: 21, client_id: params[0], machine_id: params[1], hourly_rate: params[5] }] }
+    }
+    throw new Error(`unexpected query: ${sql}`)
+  }
+
+  const res = await request('/api/bookings', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${tokenFor({ id: 3, username: 'client', role: 'client', full_name: 'Client', email: 'client@example.com' })}`,
+    },
+    body: JSON.stringify({
+      machine_id: 2,
+      operator_id: 9,
+      start_time: '2026-09-04T10:00:00Z',
+      estimated_hours: 4,
+      hourly_rate: 1,
+      site_address: 'Site A',
+      work_description: 'Excavation',
+    }),
+  })
+
+  assert.equal(res.status, 201)
+  assert.equal(insertedRate, 1500)
+})
+
 test('booking completion updates booking, wallet, and ledger in one transaction', async () => {
   const queries = []
   const client = {
@@ -161,4 +196,39 @@ test('booking completion does not double-charge completed bookings', async () =>
   assert.ok(queries.includes('ROLLBACK'))
   assert.equal(queries.some((sql) => /UPDATE de_users/.test(sql)), false)
   assert.equal(queries.some((sql) => /INSERT INTO wallet_transactions/.test(sql)), false)
+})
+
+test('booking completion rejects charges above wallet balance', async () => {
+  const queries = []
+  const client = {
+    query: async (sql) => {
+      queries.push(sql)
+      if (sql === 'BEGIN' || sql === 'ROLLBACK') return { rows: [], rowCount: 0 }
+      if (/SELECT \* FROM bookings/.test(sql)) {
+        return { rows: [{ id: 7, client_id: 3, operator_id: 9, status: 'active', hourly_rate: '1500.00' }] }
+      }
+      if (/SELECT wallet_balance/.test(sql)) return { rows: [{ wallet_balance: '1000.00' }] }
+      throw new Error(`unexpected query: ${sql}`)
+    },
+    release: () => {},
+  }
+
+  pool.query = async () => ({
+    rows: [{ id: 1, username: 'admin', role: 'admin', full_name: 'Admin', email: 'admin@example.com', is_active: true }],
+  })
+  pool.connect = async () => client
+
+  const res = await request('/api/bookings/7/complete', {
+    method: 'PUT',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${tokenFor({ id: 1, username: 'admin', role: 'admin', full_name: 'Admin', email: 'admin@example.com' })}`,
+    },
+    body: JSON.stringify({ actual_hours: 2 }),
+  })
+
+  assert.equal(res.status, 400)
+  assert.ok(queries.includes('ROLLBACK'))
+  assert.equal(queries.some((sql) => /UPDATE bookings/.test(sql)), false)
+  assert.equal(queries.some((sql) => /UPDATE de_users/.test(sql)), false)
 })

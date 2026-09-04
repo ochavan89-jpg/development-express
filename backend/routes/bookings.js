@@ -24,10 +24,18 @@ router.post('/', protect, authorize('admin','client'), async (req, res) => {
   try {
     const { machine_id, operator_id, start_time, estimated_hours, hourly_rate, site_address, work_description } = req.body
     const client_id = req.user.role === 'client' ? req.user.id : req.body.client_id
+    let billingRate = hourly_rate
+    if (req.user.role === 'client' || billingRate === undefined || billingRate === null) {
+      const { rows: machines } = await pool.query('SELECT rate_per_hour FROM machines WHERE id=$1', [machine_id])
+      if (!machines.length) return res.status(404).json({ success:false, message:'Machine not found' })
+      billingRate = machines[0].rate_per_hour
+    }
+    const rate = parseFloat(billingRate)
+    if (!Number.isFinite(rate) || rate <= 0) return res.status(400).json({ success:false, message:'Invalid hourly rate' })
     const { rows } = await pool.query(
       `INSERT INTO bookings (client_id,machine_id,operator_id,start_time,estimated_hours,hourly_rate,site_address,work_description)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [client_id, machine_id, operator_id, start_time, estimated_hours, hourly_rate, site_address, work_description]
+      [client_id, machine_id, operator_id, start_time, estimated_hours, rate, site_address, work_description]
     )
     res.status(201).json({ success:true, data: rows[0] })
   } catch (err) { res.status(500).json({ success:false, message:err.message }) }
@@ -70,6 +78,10 @@ router.put('/:id/complete', protect, authorize('admin','operator'), async (req, 
     }
     const balanceBefore = parseFloat(walletRows[0].wallet_balance || 0)
     const balanceAfter = balanceBefore - totalAmount
+    if (balanceAfter < 0) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ success:false, message:'Insufficient wallet balance' })
+    }
 
     const { rows } = await client.query(
       `UPDATE bookings SET status='completed', end_time=NOW(), actual_hours=$1, total_amount=$2, end_fuel_reading=$3, end_hmr=$4 WHERE id=$5 RETURNING *`,
