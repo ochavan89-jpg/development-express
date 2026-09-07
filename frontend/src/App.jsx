@@ -1,6 +1,6 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 
 import Layout from "./components/Layout/Layout";
 import Login from "./pages/Login";
@@ -12,6 +12,17 @@ import Operators from "./pages/Operators";
 import Bookings from "./pages/Bookings";
 import Users from "./pages/Users";
 
+function RequireAuth({ roles, children }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) return null;
+  if (!user) return <Navigate to="/" replace state={{ from: location }} />;
+  if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
+
+  return children;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -21,14 +32,14 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Login />} />
 
-          <Route element={<Layout />}>
+          <Route element={<RequireAuth><Layout /></RequireAuth>}>
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/machines" element={<Machines />} />
-            <Route path="/wallet" element={<Wallet />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/operators" element={<Operators />} />
-            <Route path="/bookings" element={<Bookings />} />
-            <Route path="/users" element={<Users />} />
+            <Route path="/machines" element={<RequireAuth roles={["admin", "owner"]}><Machines /></RequireAuth>} />
+            <Route path="/wallet" element={<RequireAuth roles={["admin", "owner", "client"]}><Wallet /></RequireAuth>} />
+            <Route path="/reports" element={<RequireAuth roles={["admin", "owner"]}><Reports /></RequireAuth>} />
+            <Route path="/operators" element={<RequireAuth roles={["admin"]}><Operators /></RequireAuth>} />
+            <Route path="/bookings" element={<RequireAuth roles={["admin", "owner", "client"]}><Bookings /></RequireAuth>} />
+            <Route path="/users" element={<RequireAuth roles={["admin"]}><Users /></RequireAuth>} />
           </Route>
         </Routes>
 
