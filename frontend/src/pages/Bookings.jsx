@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { bookingsAPI } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
 const BKS = [
   { id:1, client:'ABC Construction', machine:'JCB Backhoe 3DX',    reg:'MH12AB1234', start_time:'2026-02-15T08:00:00Z', status:'active',    hourly_rate:1500, actual_hours:6.5, site:'Karad Site A' },
@@ -8,7 +10,15 @@ const BKS = [
 ]
 const SC = { active:'b-active', pending:'b-idle', completed:'b-offline', cancelled:'b-maint' }
 export default function Bookings() {
-  const [bks] = useState(BKS)
+  const { user } = useAuth()
+  const [bks, setBks] = useState([])
+
+  useEffect(() => {
+    bookingsAPI.getAll()
+      .then(r => setBks(r.data.data || []))
+      .catch(() => setBks(user?.role === 'client' ? [] : BKS))
+  }, [user?.role])
+
   return (
     <div>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:22 }}>
@@ -19,19 +29,24 @@ export default function Bookings() {
         <table className="tbl">
           <thead><tr><th>ID</th><th>Client</th><th>Machine</th><th>Site</th><th>Start</th><th>Hours</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead>
           <tbody>
-            {bks.map(b=>(
-              <tr key={b.id}>
-                <td className="mono" style={{ color:'var(--text-dim)', fontSize:12 }}>#{String(b.id).padStart(4,'0')}</td>
-                <td style={{ fontWeight:600 }}>{b.client}</td>
-                <td><div>{b.machine}</div><div className="mono" style={{ fontSize:11, color:'var(--gold)' }}>{b.reg}</div></td>
-                <td style={{ fontSize:12, color:'var(--text-dim)' }}>{b.site}</td>
-                <td className="mono" style={{ fontSize:11 }}>{new Date(b.start_time).toLocaleDateString('en-IN')}</td>
-                <td className="mono" style={{ color:'var(--green)' }}>{b.actual_hours} hrs</td>
-                <td className="mono" style={{ color:'var(--gold)' }}>₹{(b.hourly_rate*b.actual_hours).toLocaleString()}</td>
-                <td><span className={`badge ${SC[b.status]}`}>{b.status}</span></td>
-                <td>{b.status==='active' && <button className="btn btn-green" style={{ fontSize:10 }} onClick={()=>toast.success('Booking completed!')}>COMPLETE</button>}</td>
-              </tr>
-            ))}
+            {bks.map(b => {
+              const machine = b.machine || [b.machine_type, b.model].filter(Boolean).join(' ')
+              const hours = b.actual_hours || b.estimated_hours || 0
+              const amount = b.total_amount || (b.hourly_rate * hours)
+              return (
+                <tr key={b.id}>
+                  <td className="mono" style={{ color:'var(--text-dim)', fontSize:12 }}>#{String(b.id).padStart(4,'0')}</td>
+                  <td style={{ fontWeight:600 }}>{b.client || b.client_name || b.company_name || '—'}</td>
+                  <td><div>{machine}</div><div className="mono" style={{ fontSize:11, color:'var(--gold)' }}>{b.reg || b.registration_number || '—'}</div></td>
+                  <td style={{ fontSize:12, color:'var(--text-dim)' }}>{b.site || b.site_address || '—'}</td>
+                  <td className="mono" style={{ fontSize:11 }}>{new Date(b.start_time).toLocaleDateString('en-IN')}</td>
+                  <td className="mono" style={{ color:'var(--green)' }}>{hours} hrs</td>
+                  <td className="mono" style={{ color:'var(--gold)' }}>₹{amount.toLocaleString()}</td>
+                  <td><span className={`badge ${SC[b.status]}`}>{b.status}</span></td>
+                  <td>{b.status==='active' && <button className="btn btn-green" style={{ fontSize:10 }} onClick={()=>toast.success('Booking completed!')}>COMPLETE</button>}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
