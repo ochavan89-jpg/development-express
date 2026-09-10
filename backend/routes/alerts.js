@@ -25,14 +25,16 @@ router.get('/', protect, async (req, res) => {
 
 router.put('/:id/read', protect, async (req, res) => {
   try {
-    await pool.query('UPDATE alerts SET is_read=true WHERE id=$1', [req.params.id])
+    const { rowCount } = await pool.query('UPDATE alerts SET is_read=true WHERE id=$1 AND user_id=$2', [req.params.id, req.user.id])
+    if (!rowCount) return res.status(404).json({ success:false, message:'Alert not found' })
     res.json({ success:true, message:'Alert marked as read' })
   } catch { res.json({ success:true, message:'Updated' }) }
 })
 
 router.put('/:id/resolve', protect, async (req, res) => {
   try {
-    await pool.query('UPDATE alerts SET is_resolved=true, resolved_at=NOW(), resolved_by=$1 WHERE id=$2', [req.user.id, req.params.id])
+    const { rowCount } = await pool.query('UPDATE alerts SET is_resolved=true, resolved_at=NOW(), resolved_by=$1 WHERE id=$2 AND user_id=$1', [req.user.id, req.params.id])
+    if (!rowCount) return res.status(404).json({ success:false, message:'Alert not found' })
     res.json({ success:true, message:'Alert resolved' })
   } catch { res.json({ success:true, message:'Resolved' }) }
 })
