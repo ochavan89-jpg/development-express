@@ -26,7 +26,13 @@ router.get('/', protect, async (req, res) => {
 
 router.get('/:id', protect, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM machines WHERE id=$1', [req.params.id])
+    const params = [req.params.id]
+    let q = 'SELECT * FROM machines WHERE id=$1'
+    if (req.user.role === 'owner') {
+      params.push(req.user.id)
+      q += ` AND owner_id=$${params.length}`
+    }
+    const { rows } = await pool.query(q, params)
     if (!rows.length) return res.status(404).json({ success:false, message:'Machine not found' })
     res.json({ success:true, data: rows[0] })
   } catch { res.json({ success:true, data: DEMO.find(m=>m.id==req.params.id)||DEMO[0] }) }
@@ -56,7 +62,14 @@ router.put('/:id', protect, authorize('admin','owner'), async (req, res) => {
     fields.forEach(f => { if (req.body[f] !== undefined) { vals.push(req.body[f]); updates.push(`${f}=$${vals.length}`) } })
     if (!updates.length) return res.status(400).json({ success:false, message:'No fields to update' })
     vals.push(req.params.id)
-    const { rows } = await pool.query(`UPDATE machines SET ${updates.join(',')} WHERE id=$${vals.length} RETURNING *`, vals)
+    let q = `UPDATE machines SET ${updates.join(',')} WHERE id=$${vals.length}`
+    if (req.user.role === 'owner') {
+      vals.push(req.user.id)
+      q += ` AND owner_id=$${vals.length}`
+    }
+    q += ' RETURNING *'
+    const { rows } = await pool.query(q, vals)
+    if (!rows.length) return res.status(404).json({ success:false, message:'Machine not found' })
     const io = req.app.get('io')
     if (io) io.to(`machine-${req.params.id}`).emit('machine-updated', rows[0])
     res.json({ success:true, data: rows[0] })
