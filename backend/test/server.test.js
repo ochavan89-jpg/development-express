@@ -117,3 +117,67 @@ test('production auth does not trust token payloads when DB verification fails',
     pool.query = originalQuery
   }
 })
+
+test('booking completion rejects debits that exceed wallet balance', async () => {
+  const originalQuery = pool.query
+  const originalConnect = pool.connect
+  const originalJwtSecret = process.env.JWT_SECRET
+  process.env.JWT_SECRET = originalJwtSecret || 'test-secret'
+  pool.query = async () => ({
+    rows: [{
+      id: 7,
+      username: 'operator',
+      email: 'operator@example.com',
+      role: 'operator',
+      full_name: 'Operator User',
+      is_active: true,
+    }],
+  })
+
+  const queries = []
+  const client = {
+    query: async (sql) => {
+      queries.push(sql)
+      if (sql === 'BEGIN' || sql === 'ROLLBACK') return { rows: [] }
+      if (sql.startsWith('SELECT * FROM bookings')) {
+        return {
+          rows: [{
+            id: 55,
+            client_id: 12,
+            operator_id: 7,
+            status: 'active',
+            hourly_rate: 1000,
+          }],
+        }
+      }
+      if (sql.startsWith('SELECT wallet_balance')) {
+        return { rows: [{ wallet_balance: 500 }] }
+      }
+      throw new Error(`unexpected query: ${sql}`)
+    },
+    release: () => {},
+  }
+  pool.connect = async () => client
+
+  try {
+    const token = jwt.sign(
+      { id: 7, username: 'operator', role: 'operator', full_name: 'Operator User' },
+      process.env.JWT_SECRET
+    )
+    const { response, payload } = await request('/api/bookings/55/complete', {
+      method: 'PUT',
+      headers: { authorization: `Bearer ${token}` },
+      body: { actual_hours: 2 },
+    })
+
+    assert.equal(response.status, 400)
+    assert.equal(payload.message, 'Insufficient wallet balance')
+    assert.ok(queries.includes('ROLLBACK'))
+    assert.ok(!queries.some(sql => sql.startsWith('UPDATE de_users')))
+  } finally {
+    if (originalJwtSecret === undefined) delete process.env.JWT_SECRET
+    else process.env.JWT_SECRET = originalJwtSecret
+    pool.query = originalQuery
+    pool.connect = originalConnect
+  }
+})

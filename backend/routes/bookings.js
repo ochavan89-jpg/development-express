@@ -86,6 +86,11 @@ router.put('/:id/complete', protect, authorize('admin','operator'), async (req, 
       return res.status(404).json({ success:false, message:'Client not found' })
     }
     const balanceBefore = Number(users[0].wallet_balance || 0)
+    if (balanceBefore < totalAmount) {
+      await client.query('ROLLBACK')
+      inTransaction = false
+      return res.status(400).json({ success:false, message:'Insufficient wallet balance' })
+    }
     const balanceAfter = balanceBefore - totalAmount
     const { rows } = await client.query(
       `UPDATE bookings SET status='completed', end_time=NOW(), actual_hours=$1, total_amount=$2, end_fuel_reading=$3, end_hmr=$4 WHERE id=$5 RETURNING *`,
@@ -112,7 +117,7 @@ router.put('/:id/complete', protect, authorize('admin','operator'), async (req, 
 router.put('/:id/cancel', protect, async (req, res) => {
   try {
     const params = [req.params.id]
-    let q = "UPDATE bookings SET status='cancelled' WHERE id=$1"
+    let q = "UPDATE bookings SET status='cancelled' WHERE id=$1 AND status IN ('pending','active')"
     if (req.user.role === 'client') { params.push(req.user.id); q += ` AND client_id=$${params.length}` }
     if (req.user.role === 'operator') { params.push(req.user.id); q += ` AND operator_id=$${params.length}` }
     q += ' RETURNING id'
