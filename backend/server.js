@@ -4,6 +4,15 @@ const rateLimit = require("express-rate-limit");
 require("dotenv").config();
 
 const app = express();
+const { testConnection } = require("./config/db");
+const authRoutes = require("./routes/auth");
+const dashboardRoutes = require("./routes/dashboard");
+const machinesRoutes = require("./routes/machines");
+const bookingsRoutes = require("./routes/bookings");
+const walletRoutes = require("./routes/wallet");
+const usersRoutes = require("./routes/users");
+const attendanceRoutes = require("./routes/attendance");
+const alertsRoutes = require("./routes/alerts");
 
 /* ===============================
    🔥 IMPORTANT — Render fix
@@ -34,22 +43,31 @@ app.use("/api", limiter);
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,
-    message: "🚀 DEVELOPMENT EXPRESS API RUNNING",
+    message: "Development Express API running",
   });
 });
 
 /* ===============================
-   Auth Routes (example)
-   👉 तुझा auth.js असेल तर ठेव
+   API Routes
 ================================ */
-// const authRoutes = require("./routes/auth");
-// app.use("/api/auth", authRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/machines", machinesRoutes);
+app.use("/api/bookings", bookingsRoutes);
+app.use("/api/wallet", walletRoutes);
+app.use("/api/users", usersRoutes);
+app.use("/api/attendance", attendanceRoutes);
+app.use("/api/alerts", alertsRoutes);
 
 /* ===============================
    Root Route
 ================================ */
 app.get("/", (req, res) => {
-  res.send("✅ Development Express Backend Live");
+  res.send("Development Express Backend Live");
+});
+
+app.use("/api", (req, res) => {
+  res.status(404).json({ success: false, message: "API route not found" });
 });
 
 /* ===============================
@@ -57,9 +75,14 @@ app.get("/", (req, res) => {
 ================================ */
 const PORT = process.env.PORT || 10000;
 
-app.listen(PORT, () => {
-  console.log("=================================");
-  console.log("🚀 DEVELOPMENT EXPRESS API SERVER");
-  console.log(`🌐 Server running on port ${PORT}`);
-  console.log("=================================");
-});
+if (require.main === module) {
+  testConnection();
+  app.listen(PORT, () => {
+    console.log("=================================");
+    console.log("Development Express API server");
+    console.log(`Server running on port ${PORT}`);
+    console.log("=================================");
+  });
+}
+
+module.exports = app;
