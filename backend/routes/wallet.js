@@ -2,6 +2,11 @@ const router = require('express').Router()
 const { pool } = require('../config/db')
 const { protect, authorize } = require('../middleware/auth')
 
+const positiveNumber = value => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
 router.get('/balance', protect, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT wallet_balance FROM de_users WHERE id=$1', [req.user.id])
@@ -9,7 +14,7 @@ router.get('/balance', protect, async (req, res) => {
   } catch { res.json({ success:true, data:{ balance: req.user.role==='client'?3200:0 } }) }
 })
 
-router.get('/all-balances', protect, authorize('admin','owner'), async (req, res) => {
+router.get('/all-balances', protect, authorize('admin'), async (req, res) => {
   try {
     const { rows } = await pool.query(`SELECT id,full_name,company_name,wallet_balance FROM de_users WHERE role='client' ORDER BY wallet_balance ASC`)
     res.json({ success:true, data: rows })
@@ -29,21 +34,39 @@ router.get('/transactions', protect, async (req, res) => {
 })
 
 router.post('/recharge', protect, authorize('admin'), async (req, res) => {
+  let client
+  let inTransaction = false
   try {
     const { user_id, amount, reference_id } = req.body
-    if (!user_id || !amount || amount <= 0) return res.status(400).json({ success:false, message:'Invalid recharge data' })
-    const { rows: ur } = await pool.query('SELECT wallet_balance FROM de_users WHERE id=$1', [user_id])
-    if (!ur.length) return res.status(404).json({ success:false, message:'User not found' })
+    const rechargeAmount = positiveNumber(amount)
+    if (!user_id || !rechargeAmount) return res.status(400).json({ success:false, message:'Invalid recharge data' })
+    client = await pool.connect()
+    await client.query('BEGIN')
+    inTransaction = true
+    const { rows: ur } = await client.query('SELECT wallet_balance FROM de_users WHERE id=$1 FOR UPDATE', [user_id])
+    if (!ur.length) {
+      await client.query('ROLLBACK')
+      inTransaction = false
+      return res.status(404).json({ success:false, message:'User not found' })
+    }
     const balBefore = parseFloat(ur[0].wallet_balance)
-    const balAfter  = balBefore + parseFloat(amount)
-    await pool.query('UPDATE de_users SET wallet_balance=$1 WHERE id=$2', [balAfter, user_id])
-    const { rows } = await pool.query(
+    const balAfter  = balBefore + rechargeAmount
+    await client.query('UPDATE de_users SET wallet_balance=$1 WHERE id=$2', [balAfter, user_id])
+    const { rows } = await client.query(
       `INSERT INTO wallet_transactions (user_id,transaction_type,amount,balance_before,balance_after,description,reference_id)
        VALUES ($1,'credit',$2,$3,$4,'Wallet Recharge',$5) RETURNING *`,
-      [user_id, amount, balBefore, balAfter, reference_id]
+      [user_id, rechargeAmount, balBefore, balAfter, reference_id]
     )
-    res.json({ success:true, data: rows[0], message:`₹${amount} recharged successfully` })
-  } catch (err) { res.status(500).json({ success:false, message:err.message }) }
+    await client.query('COMMIT')
+    inTransaction = false
+    res.json({ success:true, data: rows[0], message:`₹${rechargeAmount} recharged successfully` })
+  } catch (err) {
+    if (client && inTransaction) {
+      try { await client.query('ROLLBACK') } catch {}
+    }
+    res.status(500).json({ success:false, message:err.message })
+  }
+  finally { if (client) client.release() }
 })
 
 module.exports = router
