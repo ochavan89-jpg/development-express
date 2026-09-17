@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken')
 const { pool } = require('../config/db')
 
+const allowDemoMode = process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEMO_MODE === 'true'
+
 const protect = async (req, res, next) => {
   try {
     const auth = req.headers.authorization
@@ -21,6 +23,9 @@ const protect = async (req, res, next) => {
       }
       req.user = rows[0]
     } catch {
+      if (!allowDemoMode) {
+        return res.status(503).json({ success: false, message: 'Authentication service unavailable' })
+      }
       // Demo fallback — use token payload directly
       req.user = { id: decoded.id, username: decoded.username, role: decoded.role, full_name: decoded.full_name, email: decoded.email }
     }
