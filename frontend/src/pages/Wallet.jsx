@@ -18,13 +18,25 @@ const DEMO_TXN = [
 
 export default function Wallet() {
   const { user } = useAuth()
-  const [bals, setBals] = useState(DEMO_BAL)
-  const [txns, setTxns] = useState(DEMO_TXN)
+  const [bals, setBals] = useState([])
+  const [txns, setTxns] = useState([])
 
   useEffect(() => {
-    walletAPI.getAllBalances().then(r=>{ if(r.data.data?.length) setBals(r.data.data) }).catch(()=>{})
-    walletAPI.getTransactions({limit:20}).then(r=>{ if(r.data.data?.length) setTxns(r.data.data) }).catch(()=>{})
-  }, [])
+    if (!user) return
+    if (user.role === 'admin') {
+      walletAPI.getAllBalances().then(r=>setBals(r.data.data || DEMO_BAL)).catch(()=>setBals(DEMO_BAL))
+    } else {
+      walletAPI.getBalance()
+        .then(r=>setBals([{
+          id: user.id,
+          full_name: user.full_name,
+          company_name: user.company_name || user.full_name,
+          wallet_balance: r.data.data?.balance || 0,
+        }]))
+        .catch(()=>setBals([]))
+    }
+    walletAPI.getTransactions({limit:20}).then(r=>setTxns(r.data.data || [])).catch(()=>setTxns([]))
+  }, [user])
 
   const critical = bals.filter(c => c.wallet_balance < 5000)
 
