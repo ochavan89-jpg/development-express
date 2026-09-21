@@ -22,8 +22,17 @@ router.get('/', protect, async (req, res) => {
 
 router.post('/', protect, authorize('admin','client'), async (req, res) => {
   try {
-    const { machine_id, operator_id, start_time, estimated_hours, hourly_rate, site_address, work_description } = req.body
+    const { machine_id, operator_id, start_time, estimated_hours, site_address, work_description } = req.body
     const client_id = req.user.role === 'client' ? req.user.id : req.body.client_id
+    if (!client_id || !machine_id || !start_time) {
+      return res.status(400).json({ success:false, message:'Client, machine, and start time are required' })
+    }
+    const { rows: machines } = await pool.query('SELECT rate_per_hour FROM machines WHERE id=$1', [machine_id])
+    if (!machines.length) return res.status(404).json({ success:false, message:'Machine not found' })
+    const hourly_rate = parseFloat(machines[0].rate_per_hour)
+    if (!Number.isFinite(hourly_rate) || hourly_rate <= 0) {
+      return res.status(400).json({ success:false, message:'Machine hourly rate is not configured' })
+    }
     const { rows } = await pool.query(
       `INSERT INTO bookings (client_id,machine_id,operator_id,start_time,estimated_hours,hourly_rate,site_address,work_description)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
@@ -34,26 +43,86 @@ router.post('/', protect, authorize('admin','client'), async (req, res) => {
 })
 
 router.put('/:id/complete', protect, authorize('admin','operator'), async (req, res) => {
+  const { actual_hours, end_fuel_reading, end_hmr } = req.body
+  const hours = parseFloat(actual_hours)
+  if (!Number.isFinite(hours) || hours <= 0) {
+    return res.status(400).json({ success:false, message:'Actual hours must be greater than zero' })
+  }
+
+  let client
   try {
-    const { actual_hours, end_fuel_reading, end_hmr } = req.body
-    const { rows: br } = await pool.query('SELECT * FROM bookings WHERE id=$1', [req.params.id])
-    if (!br.length) return res.status(404).json({ success:false, message:'Booking not found' })
-    const totalAmount = actual_hours * br[0].hourly_rate
-    const { rows } = await pool.query(
-      `UPDATE bookings SET status='completed', end_time=NOW(), actual_hours=$1, total_amount=$2, end_fuel_reading=$3, end_hmr=$4 WHERE id=$5 RETURNING *`,
-      [actual_hours, totalAmount, end_fuel_reading, end_hmr, req.params.id]
+    client = await pool.connect()
+    await client.query('BEGIN')
+    const { rows: br } = await client.query(
+      `SELECT b.*, u.wallet_balance
+       FROM bookings b
+       JOIN de_users u ON u.id=b.client_id
+       WHERE b.id=$1
+       FOR UPDATE OF b, u`,
+      [req.params.id]
     )
-    // Deduct from wallet
-    try {
-      await pool.query('UPDATE de_users SET wallet_balance=wallet_balance-$1 WHERE id=$2', [totalAmount, br[0].client_id])
-    } catch {}
+    if (!br.length) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ success:false, message:'Booking not found' })
+    }
+    const booking = br[0]
+    if (booking.status !== 'active') {
+      await client.query('ROLLBACK')
+      return res.status(409).json({ success:false, message:'Booking is not active' })
+    }
+    if (req.user.role === 'operator' && String(booking.operator_id) !== String(req.user.id)) {
+      await client.query('ROLLBACK')
+      return res.status(403).json({ success:false, message:'Access denied' })
+    }
+
+    const totalAmount = Number((hours * parseFloat(booking.hourly_rate)).toFixed(2))
+    const balanceBefore = parseFloat(booking.wallet_balance)
+    if (balanceBefore < totalAmount) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ success:false, message:'Insufficient wallet balance' })
+    }
+
+    const { rows: walletRows } = await client.query(
+      'UPDATE de_users SET wallet_balance=wallet_balance-$1 WHERE id=$2 RETURNING wallet_balance',
+      [totalAmount, booking.client_id]
+    )
+    const balanceAfter = parseFloat(walletRows[0].wallet_balance)
+    await client.query(
+      `INSERT INTO wallet_transactions
+       (user_id,transaction_type,amount,balance_before,balance_after,description,booking_id)
+       VALUES ($1,'debit',$2,$3,$4,$5,$6)`,
+      [booking.client_id, totalAmount, balanceBefore, balanceAfter, 'Booking completion debit', booking.id]
+    )
+    const { rows } = await client.query(
+      `UPDATE bookings SET status='completed', end_time=NOW(), actual_hours=$1, total_amount=$2, end_fuel_reading=$3, end_hmr=$4 WHERE id=$5 RETURNING *`,
+      [hours, totalAmount, end_fuel_reading, end_hmr, req.params.id]
+    )
+    await client.query('COMMIT')
     res.json({ success:true, data: rows[0] })
-  } catch (err) { res.status(500).json({ success:false, message:err.message }) }
+  } catch (err) {
+    if (client) {
+      try { await client.query('ROLLBACK') } catch {}
+    }
+    res.status(500).json({ success:false, message:err.message })
+  } finally {
+    if (client) client.release()
+  }
 })
 
 router.put('/:id/cancel', protect, async (req, res) => {
   try {
-    await pool.query("UPDATE bookings SET status='cancelled' WHERE id=$1", [req.params.id])
+    if (!['admin', 'client'].includes(req.user.role)) {
+      return res.status(403).json({ success:false, message:'Access denied' })
+    }
+    const params = [req.params.id]
+    let q = "UPDATE bookings SET status='cancelled' WHERE id=$1 AND status IN ('pending','active')"
+    if (req.user.role === 'client') {
+      params.push(req.user.id)
+      q += ` AND client_id=$${params.length}`
+    }
+    q += ' RETURNING id'
+    const { rows } = await pool.query(q, params)
+    if (!rows.length) return res.status(404).json({ success:false, message:'Booking not found' })
     res.json({ success:true, message:'Booking cancelled' })
   } catch (err) { res.status(500).json({ success:false, message:err.message }) }
 })
