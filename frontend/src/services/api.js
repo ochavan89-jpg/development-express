@@ -3,9 +3,12 @@ import axios from "axios";
 // ===============================
 // 🔥 Base URL (Render production)
 // ===============================
-const API_BASE_URL =
+const RAW_API_BASE_URL =
   import.meta.env.VITE_API_URL ||
   "https://development-express-api.onrender.com/api";
+const API_BASE_URL = RAW_API_BASE_URL.replace(/\/+$/, "").endsWith("/api")
+  ? RAW_API_BASE_URL.replace(/\/+$/, "")
+  : `${RAW_API_BASE_URL.replace(/\/+$/, "")}/api`;
 
 // ===============================
 // 🚀 Axios Instance

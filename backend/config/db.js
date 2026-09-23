@@ -23,7 +23,11 @@ const testConnection = async () => {
     return true
   } catch (err) {
     console.error('❌ Database connection failed:', err.message)
-    console.log('⚠️ Running without database (demo mode)')
+    if (process.env.NODE_ENV === 'production') {
+      console.error('❌ Database connection is required in production')
+    } else {
+      console.log('⚠️ Running without database (demo mode)')
+    }
     return false
   }
 }

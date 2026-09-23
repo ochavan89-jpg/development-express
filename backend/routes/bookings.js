@@ -13,6 +13,9 @@ router.get('/', protect, async (req, res) => {
     let q = `SELECT b.*, uc.full_name client_name, uc.company_name, m.machine_type, m.registration_number FROM bookings b LEFT JOIN de_users uc ON b.client_id=uc.id LEFT JOIN machines m ON b.machine_id=m.id WHERE 1=1`
     const params = []
     if (req.user.role === 'client') { params.push(req.user.id); q += ` AND b.client_id=$${params.length}` }
+    else if (req.user.role === 'operator') { params.push(req.user.id); q += ` AND b.operator_id=$${params.length}` }
+    else if (req.user.role === 'owner') { params.push(req.user.id); q += ` AND m.owner_id=$${params.length}` }
+    else if (req.user.role !== 'admin') return res.status(403).json({ success:false, message:'Access denied' })
     if (status) { params.push(status); q += ` AND b.status=$${params.length}` }
     q += ' ORDER BY b.created_at DESC'
     const { rows } = await pool.query(q, params)
@@ -82,7 +85,7 @@ router.put('/:id/complete', protect, authorize('admin','operator'), async (req, 
     }
     const balanceAfter = Number(balances[0]?.wallet_balance || 0)
     await client.query(
-      `INSERT INTO wallet_transactions (user_id,transaction_type,amount,balance_before,balance_after,description,reference_id)
+      `INSERT INTO wallet_transactions (user_id,transaction_type,amount,balance_before,balance_after,description,booking_id)
        VALUES ($1,'debit',$2,$3,$4,'Booking completion debit',$5)`,
       [br[0].client_id, totalAmount, balanceAfter + totalAmount, balanceAfter, req.params.id]
     )

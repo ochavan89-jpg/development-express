@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 require("dotenv").config();
+const { testConnection } = require("./config/db");
 
 const app = express();
 
@@ -62,13 +63,22 @@ app.get("/", (req, res) => {
 ================================ */
 const PORT = process.env.PORT || 10000;
 
-if (require.main === module) {
+const startServer = async () => {
+  const dbConnected = await testConnection();
+  if (!dbConnected && process.env.NODE_ENV === "production") {
+    process.exit(1);
+  }
+
   app.listen(PORT, () => {
     console.log("=================================");
     console.log("🚀 DEVELOPMENT EXPRESS API SERVER");
     console.log(`🌐 Server running on port ${PORT}`);
     console.log("=================================");
   });
+};
+
+if (require.main === module) {
+  startServer();
 }
 
 module.exports = app;

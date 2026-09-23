@@ -37,6 +37,16 @@ router.post('/recharge', protect, authorize('admin'), async (req, res) => {
 
     client = await pool.connect()
     await client.query('BEGIN')
+    if (reference_id) {
+      const { rows: existing } = await client.query(
+        "SELECT * FROM wallet_transactions WHERE reference_id=$1 AND transaction_type='credit' FOR UPDATE",
+        [reference_id]
+      )
+      if (existing.length) {
+        await client.query('COMMIT')
+        return res.json({ success:true, data: existing[0], message:'Recharge already recorded' })
+      }
+    }
     const { rows: ur } = await client.query('SELECT wallet_balance FROM de_users WHERE id=$1 FOR UPDATE', [user_id])
     if (!ur.length) {
       await client.query('ROLLBACK')
@@ -55,6 +65,15 @@ router.post('/recharge', protect, authorize('admin'), async (req, res) => {
   } catch (err) {
     if (client) {
       try { await client.query('ROLLBACK') } catch {}
+    }
+    if (err.code === '23505' && req.body.reference_id) {
+      try {
+        const { rows } = await pool.query(
+          "SELECT * FROM wallet_transactions WHERE reference_id=$1 AND transaction_type='credit'",
+          [req.body.reference_id]
+        )
+        if (rows.length) return res.json({ success:true, data: rows[0], message:'Recharge already recorded' })
+      } catch {}
     }
     res.status(500).json({ success:false, message:err.message })
   } finally {
