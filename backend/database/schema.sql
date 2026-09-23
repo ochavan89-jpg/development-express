@@ -193,6 +193,9 @@ CREATE INDEX idx_bookings_client  ON bookings(client_id);
 CREATE INDEX idx_bookings_machine ON bookings(machine_id);
 CREATE INDEX idx_bookings_status  ON bookings(status);
 CREATE INDEX idx_wallet_user      ON wallet_transactions(user_id);
+CREATE UNIQUE INDEX idx_wallet_reference_unique
+    ON wallet_transactions(reference_id)
+    WHERE reference_id IS NOT NULL;
 CREATE INDEX idx_alerts_user      ON alerts(user_id);
 
 -- ─── Auto-update trigger ───────────────────────────────────────────────────────
