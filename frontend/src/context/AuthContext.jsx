@@ -13,7 +13,11 @@ export function AuthProvider({ children }) {
       api.defaults.headers.common['Authorization'] = `Bearer ${t}`
       api.get('/auth/profile')
         .then(r => setUser(r.data.data))
-        .catch(() => { localStorage.removeItem('de_token'); delete api.defaults.headers.common['Authorization'] })
+        .catch(() => {
+          localStorage.removeItem('de_token')
+          localStorage.removeItem('token')
+          delete api.defaults.headers.common['Authorization']
+        })
         .finally(() => setLoading(false))
     } else { setLoading(false) }
   }, [])
@@ -29,6 +33,7 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     localStorage.removeItem('de_token')
+    localStorage.removeItem('token')
     delete api.defaults.headers.common['Authorization']
     setUser(null)
   }
