@@ -22,9 +22,18 @@ export default function Wallet() {
   const [txns, setTxns] = useState(DEMO_TXN)
 
   useEffect(() => {
-    walletAPI.getAllBalances().then(r=>{ if(r.data.data?.length) setBals(r.data.data) }).catch(()=>{})
+    if (user?.role === 'admin') {
+      walletAPI.getAllBalances().then(r=>{ if(r.data.data?.length) setBals(r.data.data) }).catch(()=>{})
+    } else {
+      walletAPI.getBalance().then(r=>{
+        const balance = r.data.data?.balance
+        if (balance !== undefined) {
+          setBals([{ id:user?.id, full_name:user?.full_name, company_name:user?.company_name || user?.full_name, wallet_balance:Number(balance) }])
+        }
+      }).catch(()=>{})
+    }
     walletAPI.getTransactions({limit:20}).then(r=>{ if(r.data.data?.length) setTxns(r.data.data) }).catch(()=>{})
-  }, [])
+  }, [user])
 
   const critical = bals.filter(c => c.wallet_balance < 5000)
 
