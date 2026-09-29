@@ -1,89 +1,101 @@
-import axios from "axios";
+import axios from 'axios'
+import toast from 'react-hot-toast'
 
-// ===============================
-// 🔥 Base URL (Render production)
-// ===============================
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  "https://development-express-api.onrender.com/api";
+const normalizeApiBase = (value) => {
+  const base = (value || 'https://development-express-api.onrender.com/api').replace(/\/+$/, '')
+  return base.endsWith('/api') ? base : `${base}/api`
+}
 
-// ===============================
-// 🚀 Axios Instance
-// ===============================
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: normalizeApiBase(import.meta.env.VITE_API_URL),
   timeout: 30000,
-});
+})
 
-// ===============================
-// 🔐 Request Interceptor (token)
-// ===============================
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem('de_token')
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      config.headers.Authorization = `Bearer ${token}`
     }
-    return config;
+    return config
   },
   (error) => Promise.reject(error)
-);
+)
 
-// ===============================
-// ⚠️ Response Interceptor (auto logout)
-// ===============================
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("token");
-      window.location.href = "/login";
+      localStorage.removeItem('de_token')
+      delete api.defaults.headers.common.Authorization
+      if (window.location.pathname !== '/login') window.location.href = '/login'
+    } else {
+      const msg = error.response?.data?.message || 'Server error'
+      if (error.response?.status !== 404) toast.error(msg)
     }
-    return Promise.reject(error);
+    return Promise.reject(error)
   }
-);
+)
 
-// ===============================
-// 🔐 Auth API
-// ===============================
 export const authAPI = {
-  login: (data) => api.post("/auth/login", data),
-  register: (data) => api.post("/auth/register", data),
-};
+  login:          (data) => api.post('/auth/login', data),
+  profile:        () => api.get('/auth/profile'),
+  register:       (data) => api.post('/auth/register', data),
+  changePassword: (data) => api.post('/auth/change-password', data),
+}
 
-// ===============================
-// 📊 Dashboard API
-// ===============================
 export const dashboardAPI = {
-  getStats: () => api.get("/dashboard"),
-};
+  getAdmin:    () => api.get('/dashboard/admin'),
+  getOwner:    () => api.get('/dashboard/owner'),
+  getClient:   () => api.get('/dashboard/client'),
+  getOperator: () => api.get('/dashboard/operator'),
+}
 
-// ===============================
-// 🚨 Alerts API
-// ===============================
 export const alertAPI = {
-  getAll: () => api.get("/alerts"),
-};
+  getAll:   (params) => api.get('/alerts', { params }),
+  markRead: (id) => api.put(`/alerts/${id}/read`),
+  resolve:  (id) => api.put(`/alerts/${id}/resolve`),
+}
 
-// ===============================
-// ⚙️ Machines API
-// ===============================
 export const machinesAPI = {
-  getAll: () => api.get("/machines"),
-};
+  getAll:  (params) => api.get('/machines', { params }),
+  getById: (id) => api.get(`/machines/${id}`),
+  create:  (data) => api.post('/machines', data),
+  update:  (id, data) => api.put(`/machines/${id}`, data),
+  delete:  (id) => api.delete(`/machines/${id}`),
+}
 
-// ===============================
-// 👥 Users API
-// ===============================
-export const usersAPI = {
-  getAll: () => api.get("/users"),
-};
+export const bookingsAPI = {
+  getAll:   (params) => api.get('/bookings', { params }),
+  getById:  (id) => api.get(`/bookings/${id}`),
+  create:   (data) => api.post('/bookings', data),
+  complete: (id, data) => api.put(`/bookings/${id}/complete`, data),
+  cancel:   (id) => api.put(`/bookings/${id}/cancel`),
+}
 
-// ===============================
-// 💰 Wallet API
-// ===============================
 export const walletAPI = {
-  getAll: () => api.get("/wallet"),
-};
+  getBalance:      () => api.get('/wallet/balance'),
+  getTransactions: (params) => api.get('/wallet/transactions', { params }),
+  recharge:        (data) => api.post('/wallet/recharge', data),
+  getAllBalances:  () => api.get('/wallet/all-balances'),
+}
 
-export default api;
+export const usersAPI = {
+  getAll:  (params) => api.get('/users', { params }),
+  getById: (id) => api.get(`/users/${id}`),
+  update:  (id, data) => api.put(`/users/${id}`, data),
+  delete:  (id) => api.delete(`/users/${id}`),
+}
+
+export const attendanceAPI = {
+  punchIn:  (data) => api.post('/attendance/punch-in', data),
+  punchOut: (id, data) => api.put(`/attendance/${id}/punch-out`, data),
+  getAll:   (params) => api.get('/attendance', { params }),
+}
+
+// Backwards-compatible aliases for pages that still use the singular names.
+export const machineAPI = machinesAPI
+export const bookingAPI = bookingsAPI
+export const userAPI = usersAPI
+
+export default api
