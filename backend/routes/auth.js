@@ -12,10 +12,17 @@ const DEMO_USERS = [
   { id:4, username:'operator', email:'operator@developmentexpress.in', role:'operator', full_name:'Ramesh Kumar', phone:'9876543213', is_active:true, password_hash: '$2a$10$Xyz' },
 ]
 const DEMO_PASSWORDS = { admin:'admin123', owner:'owner123', client:'client123', operator:'operator123' }
+const PUBLIC_ROLES = new Set(['client'])
+const isDemoModeAllowed = () => process.env.NODE_ENV !== 'production'
+const jwtSecret = () => {
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET
+  if (process.env.NODE_ENV === 'production') throw new Error('JWT_SECRET is required in production')
+  return 'devexpress_fallback_secret'
+}
 
 const signToken = (user) => jwt.sign(
   { id: user.id, username: user.username, role: user.role, full_name: user.full_name, email: user.email },
-  process.env.JWT_SECRET || 'devexpress_fallback_secret',
+  jwtSecret(),
   { expiresIn: process.env.JWT_EXPIRE || '7d' }
 )
 
@@ -37,8 +44,10 @@ router.post('/login', async (req, res) => {
         user = rows[0]
         passwordMatch = await bcrypt.compare(password, user.password_hash)
       }
-    } catch {
-      // Demo mode fallback
+    } catch (err) {
+      if (!isDemoModeAllowed()) throw err
+
+      // Demo mode fallback is intentionally disabled in production.
       user = DEMO_USERS.find(u => u.username === username)
       passwordMatch = user && DEMO_PASSWORDS[username] === password
     }
@@ -65,6 +74,9 @@ router.post('/register', async (req, res) => {
     const { username, email, password, full_name, phone, role = 'client', company_name } = req.body
     if (!username || !email || !password || !full_name) {
       return res.status(400).json({ success:false, message:'Required fields missing' })
+    }
+    if (!PUBLIC_ROLES.has(role)) {
+      return res.status(400).json({ success:false, message:'Invalid registration role' })
     }
     const hash = await bcrypt.hash(password, parseInt(process.env.BCRYPT_SALT_ROUNDS || '10'))
     const { rows } = await pool.query(
