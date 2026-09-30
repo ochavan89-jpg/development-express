@@ -37,7 +37,7 @@ const NAV = [
 
 function Sidebar({ collapsed }) {
   const { user } = useAuth()
-  const items = NAV.filter(n => n.roles.includes(user?.role || 'admin'))
+  const items = user ? NAV.filter(n => n.roles.includes(user.role)) : []
   return (
     <aside style={{ width: collapsed ? 58 : 210, background:'var(--navy-mid)', borderRight:'1px solid var(--border)', transition:'width .25s', overflow:'hidden', flexShrink:0, position:'relative' }}>
       <nav style={{ padding:'12px 0' }}>
