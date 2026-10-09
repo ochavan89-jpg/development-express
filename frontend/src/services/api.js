@@ -20,7 +20,7 @@ const api = axios.create({
 // ===============================
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("de_token") || localStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -36,6 +36,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      localStorage.removeItem("de_token");
       localStorage.removeItem("token");
       window.location.href = "/login";
     }
@@ -56,20 +57,33 @@ export const authAPI = {
 // ===============================
 export const dashboardAPI = {
   getStats: () => api.get("/dashboard"),
+  getAdmin: () => api.get("/dashboard/admin"),
+  getOwner: () => api.get("/dashboard/owner"),
+  getClient: () => api.get("/dashboard/client"),
+  getOperator: () => api.get("/dashboard/operator"),
+  getForRole: (role) => {
+    const calls = {
+      admin: () => dashboardAPI.getAdmin(),
+      owner: () => dashboardAPI.getOwner(),
+      client: () => dashboardAPI.getClient(),
+      operator: () => dashboardAPI.getOperator(),
+    };
+    return (calls[role] || calls.admin)();
+  },
 };
 
 // ===============================
 // 🚨 Alerts API
 // ===============================
 export const alertAPI = {
-  getAll: () => api.get("/alerts"),
+  getAll: (params) => api.get("/alerts", { params }),
 };
 
 // ===============================
 // ⚙️ Machines API
 // ===============================
 export const machinesAPI = {
-  getAll: () => api.get("/machines"),
+  getAll: (params) => api.get("/machines", { params }),
 };
 
 // ===============================
@@ -84,6 +98,10 @@ export const usersAPI = {
 // ===============================
 export const walletAPI = {
   getAll: () => api.get("/wallet"),
+  getBalance: () => api.get("/wallet/balance"),
+  getAllBalances: () => api.get("/wallet/all-balances"),
+  getTransactions: (params) => api.get("/wallet/transactions", { params }),
+  recharge: (data) => api.post("/wallet/recharge", data),
 };
 
 export default api;
