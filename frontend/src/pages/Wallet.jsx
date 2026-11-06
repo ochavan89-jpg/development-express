@@ -8,23 +8,27 @@ const DEMO_BAL = [
   { id:4, full_name:'XYZ Builders',  company_name:'XYZ Builders Ltd',         wallet_balance:128400 },
   { id:5, full_name:'Govt. PWD',     company_name:'Public Works Dept.',        wallet_balance:84000 },
 ]
-const DEMO_TXN = [
-  { id:1, created_at:'2026-02-15T14:32:00Z', description:'Work Session — JCB Backhoe 6.5hrs', transaction_type:'debit', amount:9750, balance_after:3200, reg:'MH12AB1234' },
-  { id:2, created_at:'2026-02-14T09:00:00Z', description:'Wallet Recharge — Razorpay',        transaction_type:'credit',amount:50000,balance_after:12950,reg:'—' },
-  { id:3, created_at:'2026-02-14T18:00:00Z', description:'Work Session — Excavator 8hrs',     transaction_type:'debit', amount:16000,balance_after:6700, reg:'MH14CD5678' },
-  { id:4, created_at:'2026-02-13T08:00:00Z', description:'Work Session — JCB + Excavator',    transaction_type:'debit', amount:28500,balance_after:50000,reg:'MH12AB1234' },
-  { id:5, created_at:'2026-02-10T10:00:00Z', description:'Initial Wallet Recharge',            transaction_type:'credit',amount:500000,balance_after:500000,reg:'—' },
-]
 
 export default function Wallet() {
   const { user } = useAuth()
-  const [bals, setBals] = useState(DEMO_BAL)
-  const [txns, setTxns] = useState(DEMO_TXN)
+  const [bals, setBals] = useState([])
+  const [txns, setTxns] = useState([])
 
   useEffect(() => {
-    walletAPI.getAllBalances().then(r=>{ if(r.data.data?.length) setBals(r.data.data) }).catch(()=>{})
-    walletAPI.getTransactions({limit:20}).then(r=>{ if(r.data.data?.length) setTxns(r.data.data) }).catch(()=>{})
-  }, [])
+    if (user?.role === 'admin') {
+      walletAPI.getAllBalances()
+        .then(r=>{ setBals(r.data.data?.length ? r.data.data : DEMO_BAL) })
+        .catch(()=>setBals(DEMO_BAL))
+    } else {
+      walletAPI.getBalance()
+        .then(r=>{
+          const balance = r.data.data?.balance || 0
+          setBals([{ id:user?.id, full_name:user?.full_name, company_name:user?.company_name || user?.full_name || 'My Wallet', wallet_balance:balance }])
+        })
+        .catch(()=>setBals([]))
+    }
+    walletAPI.getTransactions({limit:20}).then(r=>{ setTxns(r.data.data?.length ? r.data.data : []) }).catch(()=>setTxns([]))
+  }, [user])
 
   const critical = bals.filter(c => c.wallet_balance < 5000)
 
@@ -46,7 +50,7 @@ export default function Wallet() {
         </div>
       ))}
 
-      {user?.role === 'admin' && (
+      {bals.length > 0 && (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14, marginBottom:22 }}>
           {bals.map(c=>{
             const low = c.wallet_balance < 5000
